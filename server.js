@@ -38,9 +38,13 @@ const PORT = process.env.PORT || 5000;
 
 // Configuración de CORS
 const corsOptions = {
-  origin: ['https://ferreteria-frontend.vercel.app'], // URL de tu frontend
+  origin: [
+    'https://suministros-frontend.vercel.app', // URL de tu frontend
+    'http://localhost:3000' // Para desarrollo local
+  ],
   credentials: true
 };
+
 app.use(cors(corsOptions));
 
 // Middleware
