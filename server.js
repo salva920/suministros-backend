@@ -40,8 +40,10 @@ const PORT = process.env.PORT || 5000;
 const corsOptions = {
   origin: [
     'https://suministros-frontend.vercel.app', // URL de producción
-    'http://localhost:3000' // URL de desarrollo local
+    'http://localhost:3000' // Desarrollo local
   ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
 
@@ -73,6 +75,12 @@ app.post('/api/login', (req, res) => {
   }
 });
 
+// Ruta de prueba
+app.get('/api/ping', (req, res) => {
+  console.log('¡Solicitud ping recibida!'); // Para verificar en logs
+  res.json({ message: "Pong!" });
+});
+
 // Ruta catch-all para manejar cualquier otra solicitud
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'build', 'index.html'));
@@ -87,8 +95,4 @@ app.use((err, req, res, next) => {
 // Iniciar servidor
 app.listen(PORT, () => {
   console.log(`Servidor backend corriendo en http://localhost:${PORT}`);
-});
-
-app.get('/api/ping', (req, res) => {
-  res.json({ message: "Pong!" });
 });
