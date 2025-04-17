@@ -40,8 +40,10 @@ const PORT = process.env.PORT || 5000;
 const corsOptions = {
   origin: [
     'https://suministros-frontend.vercel.app', // URL de producción
-    'http://localhost:3000' // URL de desarrollo local
+    'http://localhost:3000' // Desarrollo local
   ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
 
@@ -63,14 +65,30 @@ app.use('/api/caja', cajaRouter);
 app.use('/api/gastos', gastosRouter); 
 app.use('/api', authRoutes);
 
-// Ruta /api/login
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
-  if (username === 'DSR2025' && password === 'Francisco412612') {
-    res.json({ auth: true, token: "fake-token" }); // ¡Cambia esto en producción!
-  } else {
-    res.status(401).json({ error: "Credenciales inválidas" });
+// Ruta /api/login (versión mejorada)
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: "Faltan credenciales" });
+    }
+    
+    if (username === 'DSR2025' && password === 'Francisco412612') {
+      res.json({ auth: true, token: "fake-token" });
+    } else {
+      res.status(401).json({ error: "Credenciales inválidas" });
+    }
+  } catch (error) {
+    console.error('Error en login:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
   }
+});
+
+// Ruta de prueba
+app.get('/api/ping', (req, res) => {
+  console.log('¡Solicitud ping recibida!'); // Para verificar en logs
+  res.json({ message: "Pong!" });
 });
 
 // Ruta catch-all para manejar cualquier otra solicitud
@@ -78,17 +96,13 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'build', 'index.html'));
 });
 
-// Manejo de errores
+// Agrega manejo de errores global
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Algo salió mal en el servidor' });
+  console.error('Error del servidor:', err.stack);
+  res.status(500).json({ error: 'Error interno del servidor' });
 });
 
 // Iniciar servidor
 app.listen(PORT, () => {
   console.log(`Servidor backend corriendo en http://localhost:${PORT}`);
-});
-
-app.get('/api/ping', (req, res) => {
-  res.json({ message: "Pong!" });
 });
