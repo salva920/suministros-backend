@@ -65,13 +65,23 @@ app.use('/api/caja', cajaRouter);
 app.use('/api/gastos', gastosRouter); 
 app.use('/api', authRoutes);
 
-// Ruta /api/login
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
-  if (username === 'DSR2025' && password === 'Francisco412612') {
-    res.json({ auth: true, token: "fake-token" }); // ¡Cambia esto en producción!
-  } else {
-    res.status(401).json({ error: "Credenciales inválidas" });
+// Ruta /api/login (versión mejorada)
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: "Faltan credenciales" });
+    }
+    
+    if (username === 'DSR2025' && password === 'Francisco412612') {
+      res.json({ auth: true, token: "fake-token" });
+    } else {
+      res.status(401).json({ error: "Credenciales inválidas" });
+    }
+  } catch (error) {
+    console.error('Error en login:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
   }
 });
 
@@ -86,10 +96,10 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'build', 'index.html'));
 });
 
-// Manejo de errores
+// Agrega manejo de errores global
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Algo salió mal en el servidor' });
+  console.error('Error del servidor:', err.stack);
+  res.status(500).json({ error: 'Error interno del servidor' });
 });
 
 // Iniciar servidor
