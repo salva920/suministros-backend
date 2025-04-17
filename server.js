@@ -39,8 +39,8 @@ const PORT = process.env.PORT || 5000;
 // Configuración de CORS
 const corsOptions = {
   origin: [
-    'https://suministros-frontend.vercel.app', // URL de tu frontend
-    'http://localhost:3000' // Para desarrollo local
+    'https://suministros-frontend.vercel.app', // URL de producción
+    'http://localhost:3000' // URL de desarrollo local
   ],
   credentials: true
 };
@@ -62,6 +62,16 @@ app.use('/api/ventas', ventasRouter);
 app.use('/api/caja', cajaRouter); 
 app.use('/api/gastos', gastosRouter); 
 app.use('/api', authRoutes);
+
+// Ruta /api/login
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === 'DSR2025' && password === 'Francisco412612') {
+    res.json({ auth: true, token: "fake-token" }); // ¡Cambia esto en producción!
+  } else {
+    res.status(401).json({ error: "Credenciales inválidas" });
+  }
+});
 
 // Ruta catch-all para manejar cualquier otra solicitud
 app.get('*', (req, res) => {
