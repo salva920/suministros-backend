@@ -39,19 +39,23 @@ const PORT = process.env.PORT || 5000;
 // Middlewares básicos
 app.use(express.json());
 
-// Configuración CORS simple pero efectiva
-app.use((req, res, next) => {
-  // Permitir específicamente tu dominio frontend
+// Ruta simple de prueba
+app.get('/ping', (req, res) => {
+  // Añadir headers CORS manualmente
   res.setHeader('Access-Control-Allow-Origin', 'https://suministros-frontend.vercel.app');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
-  // Responder inmediatamente a las solicitudes OPTIONS
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  next();
+  // Responder con un mensaje simple
+  res.status(200).json({ message: 'Pong!' });
+});
+
+// Manejador OPTIONS específico
+app.options('/ping', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', 'https://suministros-frontend.vercel.app');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.status(200).end();
 });
 
 // Ruta de prueba simple
@@ -106,9 +110,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Exportación correcta para Vercel
-module.exports = (req, res) => {
-  // Este formato es crucial para Vercel
-  return app(req, res);
-};
+// Exportación para Vercel
+module.exports = app;
 
