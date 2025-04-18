@@ -45,6 +45,9 @@ app.post('/api/login', async (req, res) => {
 
 app.use('/api/productos', require('./Routes/Productos'));
 
+app.use('/api/clientes', require('./Routes/Clientes'));
+
+
 // Añadir método OPTIONS específico
 app.options('/api/productos', cors(corsOptions));
 
