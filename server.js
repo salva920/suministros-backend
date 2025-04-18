@@ -22,6 +22,27 @@ app.get('/api/ping', (req, res) => {
   res.json({ message: 'Pong!' });
 });
 
+// Ruta de login
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: "Faltan credenciales" });
+    }
+    
+    // Autenticación simple
+    if (username === 'DSR2025' && password === 'Francisco412612') {
+      res.json({ auth: true, token: "fake-token" });
+    } else {
+      res.status(401).json({ error: "Credenciales inválidas" });
+    }
+  } catch (error) {
+    console.error('Error en login:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
 // Conexión a MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB conectado en:', mongoose.connection.host))
