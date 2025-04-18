@@ -106,3 +106,6 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Servidor backend corriendo en http://localhost:${PORT}`);
 });
+
+// ¡Importante! Exporta de esta forma para Vercel
+module.exports = (req, res) => app(req, res);
