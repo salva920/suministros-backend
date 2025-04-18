@@ -43,6 +43,9 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+app.use('/api/products', require('./Routes/Productos'));
+
+
 // Conexión a MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB conectado en:', mongoose.connection.host))
