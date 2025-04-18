@@ -43,8 +43,10 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.use('/api/products', require('./Routes/Productos'));
+app.use('/api/productos', require('./Routes/Productos'));
 
+// Añadir método OPTIONS específico
+app.options('/api/productos', cors(corsOptions));
 
 // Conexión a MongoDB
 mongoose.connect(process.env.MONGO_URI)
