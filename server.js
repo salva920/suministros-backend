@@ -106,18 +106,24 @@ app.post('/api/login', async (req, res) => {
 });
 
 // Ruta de prueba mejorada
-app.get('/api/ping', (req, res) => {
+// En server.js, modifica la ruta /api/ping:
+app.get('/api/ping', async (req, res) => {
   try {
-    console.log('✅ Ping exitoso');
+    // Verificar conexión a MongoDB
+    await mongoose.connection.db.command({ ping: 1 });
+    
     res.json({ 
       status: "ok",
       message: "Pong!",
-      backendVersion: "1.0.0",
-      mongoConnected: mongoose.connection.readyState === 1
+      mongo: "Conectado ✅",
+      version: "1.0.1"
     });
   } catch (error) {
-    console.error('❌ Error en ping:', error);
-    res.status(500).json({ error: "Error interno" });
+    console.error("❌ Error en MongoDB:", error);
+    res.status(500).json({ 
+      error: "Error de base de datos",
+      detalle: error.message 
+    });
   }
 });
 
