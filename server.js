@@ -47,6 +47,15 @@ app.use('/api/productos', require('./Routes/Productos'));
 
 app.use('/api/clientes', require('./Routes/Clientes'));
 
+app.use('/api/caja', require('./Routes/caja'));
+
+app.use('/api/gastos', require('./Routes/gastos'));
+
+app.use('/api/historial', require('./Routes/historial'));
+
+app.use('/api/tasaCambio', require('./Routes/TasaCambio'));
+
+app.use('/api/ventas', require('./Routes/ventas'));
 
 // Añadir método OPTIONS específico
 app.options('/api/productos', cors(corsOptions));
