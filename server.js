@@ -36,41 +36,28 @@ const authRoutes = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Configuración de CORS
-const corsOptions = {
-  origin: [
-    'https://suministros-frontend.vercel.app',
-    'http://localhost:3000'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept'
-  ],
-  exposedHeaders: [
-    'Content-Length',
-    'X-Custom-Header'
-  ],
-  credentials: true,
-  maxAge: 86400,
-  preflightContinue: false
-};
+// Middlewares básicos
+app.use(express.json());
 
-// Aplica CORS antes de las rutas
-app.use(cors(corsOptions));
-
-// Manejo explícito de OPTIONS
-app.options('*', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', corsOptions.origin);
-  res.setHeader('Access-Control-Allow-Methods', corsOptions.methods.join(','));
-  res.setHeader('Access-Control-Allow-Headers', corsOptions.allowedHeaders.join(','));
-  res.status(204).send();
+// Configuración CORS simple pero efectiva
+app.use((req, res, next) => {
+  // Permitir específicamente tu dominio frontend
+  res.setHeader('Access-Control-Allow-Origin', 'https://suministros-frontend.vercel.app');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Responder inmediatamente a las solicitudes OPTIONS
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
 });
 
-// Middleware
-app.use(bodyParser.json());
+// Ruta de prueba simple
+app.get('/api/ping', (req, res) => {
+  res.json({ message: 'Pong!' });
+});
 
 // Servir archivos estáticos
 app.use(express.static(path.join(__dirname, '..', 'build')));
@@ -105,43 +92,23 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Ruta de prueba mejorada
-// En server.js, modifica la ruta /api/ping:
-app.get('/api/ping', async (req, res) => {
-  try {
-    // Verificar conexión a MongoDB
-    await mongoose.connection.db.command({ ping: 1 });
-    
-    res.json({ 
-      status: "ok",
-      message: "Pong!",
-      mongo: "Conectado ✅",
-      version: "1.0.1"
-    });
-  } catch (error) {
-    console.error("❌ Error en MongoDB:", error);
-    res.status(500).json({ 
-      error: "Error de base de datos",
-      detalle: error.message 
-    });
-  }
-});
-
 // Ruta catch-all para manejar cualquier otra solicitud
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'build', 'index.html'));
 });
 
-// Agrega manejo de errores global
+// Manejador de errores global
 app.use((err, req, res, next) => {
-  console.error('Error del servidor:', err.stack);
-  res.status(500).json({ error: 'Error interno del servidor' });
+  console.error('Error:', err);
+  res.status(500).json({ 
+    error: 'Error del servidor', 
+    message: err.message 
+  });
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`Servidor backend corriendo en http://localhost:${PORT}`);
-});
-
-module.exports = app; // Exporta la app de Express directamente
+// Exportación correcta para Vercel
+module.exports = (req, res) => {
+  // Este formato es crucial para Vercel
+  return app(req, res);
+};
 
