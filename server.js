@@ -39,15 +39,35 @@ const PORT = process.env.PORT || 5000;
 // Configuración de CORS
 const corsOptions = {
   origin: [
-    'https://suministros-frontend.vercel.app', // URL de producción
-    'http://localhost:3000' // Desarrollo local
+    'https://suministros-frontend.vercel.app',
+    'http://localhost:3000'
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept'
+  ],
+  exposedHeaders: [
+    'Content-Length',
+    'X-Custom-Header'
+  ],
+  credentials: true,
+  maxAge: 86400,
+  preflightContinue: false
 };
 
+// Aplica CORS antes de las rutas
 app.use(cors(corsOptions));
+
+// Manejo explícito de OPTIONS
+app.options('*', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', corsOptions.origin);
+  res.setHeader('Access-Control-Allow-Methods', corsOptions.methods.join(','));
+  res.setHeader('Access-Control-Allow-Headers', corsOptions.allowedHeaders.join(','));
+  res.status(204).send();
+});
 
 // Middleware
 app.use(bodyParser.json());
@@ -85,10 +105,20 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Ruta de prueba
+// Ruta de prueba mejorada
 app.get('/api/ping', (req, res) => {
-  console.log('¡Solicitud ping recibida!'); // Para verificar en logs
-  res.json({ message: "Pong!" });
+  try {
+    console.log('✅ Ping exitoso');
+    res.json({ 
+      status: "ok",
+      message: "Pong!",
+      backendVersion: "1.0.0",
+      mongoConnected: mongoose.connection.readyState === 1
+    });
+  } catch (error) {
+    console.error('❌ Error en ping:', error);
+    res.status(500).json({ error: "Error interno" });
+  }
 });
 
 // Ruta catch-all para manejar cualquier otra solicitud
