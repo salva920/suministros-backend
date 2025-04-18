@@ -107,5 +107,5 @@ app.listen(PORT, () => {
   console.log(`Servidor backend corriendo en http://localhost:${PORT}`);
 });
 
-// ¡Importante! Exporta de esta forma para Vercel
-module.exports = (req, res) => app(req, res);
+module.exports = app; // Exporta la app de Express directamente
+
