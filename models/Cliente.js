@@ -51,7 +51,11 @@ const clienteSchema = new mongoose.Schema({
   fechaRegistro: {
     type: Date,
     default: Date.now
-  }
+  },
+  contadorMes: {  // <- Nuevo campo necesario
+    type: Number,
+    default: 0
+  },
 });
 
 // Índices para búsquedas frecuentes

@@ -70,7 +70,11 @@ const productoSchema = new mongoose.Schema({
         return new Date(value);
       }
       return value;
-    }
+    },
+    contadorMes: {  // <- Nuevo campo necesario
+      type: Number,
+      default: 0
+    },
   }
 }, {
   toJSON: { 

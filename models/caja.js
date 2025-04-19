@@ -41,7 +41,8 @@ const cajaSchema = new mongoose.Schema({
       type: Number,
       default: 0
     }
-  }
+  },
+  
 });
 
 // Agregar el plugin de paginación

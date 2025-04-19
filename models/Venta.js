@@ -66,7 +66,11 @@ const ventaSchema = new mongoose.Schema({
   nrFactura: {
     type: String,
     required: true
-  }
+  },
+  contadorMes: {  // <- Nuevo campo necesario
+    type: Number,
+    default: 0
+  },
 });
 
 // Configurar paginación

@@ -39,6 +39,8 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+app.get('/api/dashboard', require('./Routes/Dashboard'));
+
 app.use('/api/productos', require('./Routes/Productos'));
 
 app.use('/api/clientes', require('./Routes/Clientes'));
@@ -53,10 +55,6 @@ app.use('/api', require('./Routes/TasaCambio'));
 
 app.use('/api/ventas', require('./Routes/ventas'));
 
-
-
-// Añadir método OPTIONS específico
-app.options('/api/productos', cors(corsOptions));
 
 // Conexión a MongoDB
 mongoose.connect(process.env.MONGO_URI)

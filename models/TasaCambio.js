@@ -9,7 +9,8 @@ const tasaCambioSchema = new mongoose.Schema({
   fecha: {
     type: Date,
     default: Date.now
-  }
+  },
+  
 });
 
 module.exports = mongoose.model('TasaCambio', tasaCambioSchema);
