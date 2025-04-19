@@ -4,18 +4,23 @@ const mongoose = require('mongoose');
 
 const app = express();
 
-// Middlewares básicos
-app.use(express.json());
+
 
 // Configuración temporal de CORS
 const corsOptions = {
-  origin: '*', // Permitir todos los orígenes (¡solo para pruebas!)
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Incluir OPTIONS
-  allowedHeaders: ['*'], // Permitir todos los headers (¡solo para pruebas!)
-  optionsSuccessStatus: 204 // Respuesta exitosa para preflight
+  origin: 'https://suministros-frontend.vercel.app',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
+app.use(express.json());
+
+mongoose.connect(process.env.MONGO_URI)
+.then(() => console.log('✅ MongoDB conectado en:', mongoose.connection.host))
+.catch(err => console.error('❌ Error MongoDB:', err.message));
 
 
 // Ruta de login
@@ -57,9 +62,7 @@ app.use('/api/ventas', require('./Routes/ventas'));
 
 
 // Conexión a MongoDB
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB conectado en:', mongoose.connection.host))
-  .catch(err => console.error('❌ Error MongoDB:', err.message));
+
 
 // Exportación para Vercel
 module.exports = app;
