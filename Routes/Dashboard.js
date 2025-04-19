@@ -84,14 +84,15 @@ router.get('/', async (req, res) => {
       EstadisticasMensuales.find().sort({ mes: -1 }).limit(12)
     ]);
 
-    res.json({
-      ventasTotales: datos[0][0]?.total || 0,
-      totalVentas: datos[0][0]?.count || 0,
-      productosBajoStock: datos[1],
-      totalClientes: datos[2],
-      historialMensual: historial,
-      mesActual: mesActual
-    });
+   // En Routes/Dashboard.js
+res.json({
+  ventasTotales: Number(datos[0][0]?.total) || 0,
+  totalVentas: Number(datos[0][0]?.count) || 0,
+  productosBajoStock: Array.isArray(datos[1]) ? datos[1] : [],
+  totalClientes: Number(datos[2]) || 0,
+  historialMensual: Array.isArray(historial) ? historial : [],
+  mesActual: mesActual
+});
 
   } catch (error) {
     res.status(500).json({ error: error.message });
