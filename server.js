@@ -39,7 +39,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.get('/api/dashboard', require('./Routes/Dashboard'));
+app.use('/api/dashboard', require('./Routes/Dashboard'));
 
 app.use('/api/productos', require('./Routes/Productos'));
 
