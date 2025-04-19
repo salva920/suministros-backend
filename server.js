@@ -17,10 +17,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Rutas de la API
-app.get('/api/ping', (req, res) => {
-  res.json({ message: 'Pong!' });
-});
 
 // Ruta de login
 app.post('/api/login', async (req, res) => {
