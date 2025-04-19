@@ -63,47 +63,46 @@ const reiniciarConteosMensuales = async (mesAnterior) => {
 
 router.get('/', async (req, res) => {
   try {
-    // Optimización de consultas con Promise.all
-    const [ventasData, productosData, clientesData, historialData] = await Promise.all([
-      // Agregación de ventas
+    // Consultas optimizadas con Promise.all
+    const [ventasData, productosData, clientesData] = await Promise.all([
       Venta.aggregate([
-        {
-          $group: {
-            _id: null,
-            total: { $sum: "$total" }, // Suma total de ventas
-            count: { $sum: 1 }        // Cantidad de ventas
+        { 
+          $group: { 
+            _id: null, 
+            total: { $sum: "$total" },
+            count: { $sum: 1 }
           }
         }
       ]),
-      
-      // Productos con bajo stock
-      Producto.find({ stock: { $lt: 5 } })
-        .select('nombre stock')
-        .lean(),
-      
-      // Total de clientes
-      Cliente.estimatedDocumentCount(),
-      
-      // Historial mensual (últimos 12 meses)
-      EstadisticasMensuales.find()
-        .sort({ mes: -1 })
-        .limit(12)
-        .lean()
+      Producto.find({ stock: { $lt: 5 } }).lean(),
+      Cliente.countDocuments()
     ]);
 
-    // Respuesta estructurada
+    // Estructura de respuesta estandarizada
+    const responseData = {
+      ventasTotales: ventasData[0]?.total || 0,
+      productosBajoStock: Array.isArray(productosData) ? productosData : [],
+      totalClientes: clientesData || 0
+    };
+
+    // Validación final de estructura
+    if (typeof responseData.ventasTotales !== 'number' || 
+        !Array.isArray(responseData.productosBajoStock)) {
+      throw new Error('Estructura de datos inválida');
+    }
+
     res.json({
-      ventasTotales: ventasData[0]?.total || 0, // Total de ventas
-      totalVentas: ventasData[0]?.count || 0,   // Cantidad de ventas
-      productosBajoStock: productosData,        // Lista de productos con bajo stock
-      totalClientes: clientesData,              // Total de clientes
-      historialMensual: historialData,          // Historial de los últimos 12 meses
-      mesActual: obtenerMesActual()             // Mes actual en formato YYYY-MM
+      success: true,
+      data: responseData
     });
 
   } catch (error) {
-    // Manejo de errores
-    res.status(500).json({ error: error.message });
+    console.error(`[${new Date().toISOString()}] Error en dashboard:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      errorCode: 'DASHBOARD_FETCH_ERROR'
+    });
   }
 });
 
