@@ -7,12 +7,12 @@ const app = express();
 // Middlewares básicos
 app.use(express.json());
 
-// Configuración de CORS
+// Configuración temporal de CORS
 const corsOptions = {
-  origin: 'https://suministros-frontend.vercel.app',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200
+  origin: '*', // Permitir todos los orígenes (¡solo para pruebas!)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Incluir OPTIONS
+  allowedHeaders: ['*'], // Permitir todos los headers (¡solo para pruebas!)
+  optionsSuccessStatus: 204 // Respuesta exitosa para preflight
 };
 
 app.use(cors(corsOptions));
