@@ -10,7 +10,7 @@ const clienteSchema = new mongoose.Schema({
   telefono: {
     type: String,
     required: true,
-    match: /^\+?58-?4(1[2-9]|2[0-9])-?\d{7}$/ // Mejor validación para teléfonos venezolanos
+    match:  /^(?:\+?58-?)?0?4(1[2-9]|2[0-9])-?\d{7}$/ // Mejor validación para teléfonos venezolanos
   },
   email: {
     type: String,
