@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const path = require('path');
 
 const app = express();
 
@@ -60,9 +61,27 @@ app.use('/api', require('./Routes/TasaCambio'));
 
 app.use('/api/ventas', require('./Routes/ventas'));
 
+// Configurar CORS para permitir solicitudes desde el frontend
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://suministros-frontend.vercel.app');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+});
 
-// Conexión a MongoDB
+// Sirve archivos estáticos del frontend
+app.use(express.static(path.join(__dirname, '..', 'build')));
 
+// Maneja todas las rutas no definidas
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'build', 'index.html'));
+});
+
+// Inicia el servidor
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en el puerto ${PORT}`);
+});
 
 // Exportación para Vercel
 module.exports = app;
