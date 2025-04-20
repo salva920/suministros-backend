@@ -10,7 +10,7 @@ const app = express();
 // Configuración temporal de CORS
 const corsOptions = {
   origin: 'https://suministros-frontend.vercel.app',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   optionsSuccessStatus: 204
@@ -69,13 +69,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Sirve archivos estáticos del frontend
-app.use(express.static(path.join(__dirname, '..', 'build')));
 
-// Maneja todas las rutas no definidas
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'build', 'index.html'));
-});
 
 // Inicia el servidor
 const PORT = process.env.PORT || 5000;
