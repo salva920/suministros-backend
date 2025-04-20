@@ -75,14 +75,17 @@ router.get('/', async (req, res) => {
         }
       ]),
       Producto.find({ stock: { $lt: 5 } }).lean(),
-      Cliente.countDocuments()
+      Cliente.estimatedDocumentCount()
     ]);
 
     // Estructura de respuesta estandarizada
-    const responseData = {
-      ventasTotales: ventasData[0]?.total || 0,
-      productosBajoStock: Array.isArray(productosData) ? productosData : [],
-      totalClientes: clientesData || 0
+    const response = {
+      success: true,
+      data: {
+        ventasTotales: ventasData[0]?.total || 0,
+        productosBajoStock: productosData,
+        totalClientes: clientesData
+      }
     };
 
     // Validación final de estructura
@@ -91,10 +94,8 @@ router.get('/', async (req, res) => {
       throw new Error('Estructura de datos inválida');
     }
 
-    res.json({
-      success: true,
-      data: responseData
-    });
+    // Respuesta con estructura consistente
+    res.json(response);
 
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Error en dashboard:`, error);
