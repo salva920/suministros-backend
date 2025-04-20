@@ -89,7 +89,7 @@ router.get('/', async (req, res) => {
     };
 
     // Validación final de estructura
-    if (typeof responseData.ventasTotales !== 'number' || 
+    if (typeof response.data.ventasTotales !== 'number' || 
         !Array.isArray(responseData.productosBajoStock)) {
       throw new Error('Estructura de datos inválida');
     }
