@@ -2,12 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
+require('dotenv').config();
 
 const app = express();
 
-
-
-// Configuración temporal de CORS
 const corsOptions = {
   origin: 'https://suministros-frontend.vercel.app',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -69,7 +67,30 @@ app.use((req, res, next) => {
   next();
 });
 
+// Servir archivos estáticos desde la carpeta build
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
 
+  // Manejar todas las demás solicitudes redirigiendo a index.html
+  app.get('*', (req, res) => {
+    // Verificar primero si la solicitud es para la API
+    if (!req.path.startsWith('/api/')) {
+      res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+    } else {
+      // Si es una ruta de API no encontrada, devolver 404
+      res.status(404).json({ message: 'API endpoint not found' });
+    }
+  });
+}
+
+// Manejo global de errores
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ 
+    message: 'Error en el servidor',
+    error: process.env.NODE_ENV === 'development' ? err.message : null
+  });
+});
 
 // Inicia el servidor
 const PORT = process.env.PORT || 5000;
