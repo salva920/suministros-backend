@@ -63,6 +63,8 @@ const clienteSchema = new mongoose.Schema({
   ultimaCompra: {  // Nuevo campo útil
     type: Date
   }
+}, {
+  timestamps: true
 });
 
 // Middleware para actualizar deuda automáticamente ✅
@@ -88,8 +90,8 @@ clienteSchema.set('toJSON', {
   virtuals: true,
   versionKey: false,
   transform: function(doc, ret) {
-    ret.id = ret._id.toString(); // Convertir _id a string y renombrarlo a id
-    delete ret._id; // Eliminar el campo _id
+    ret.id = ret._id.toString();
+    delete ret._id;
   }
 });
 

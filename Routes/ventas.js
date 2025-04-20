@@ -76,7 +76,7 @@ router.get('/', async (req, res) => {
     limit = 10, 
     sort = 'fecha', 
     order = 'desc',
-    cliente,
+    cliente: clienteId,
     saldoPendiente,
     fechaInicio,
     fechaFin
@@ -84,11 +84,16 @@ router.get('/', async (req, res) => {
 
   // Construir query de filtrado
   const query = {};
-  if (cliente) {
-    if (!mongoose.Types.ObjectId.isValid(cliente)) {
-      return res.status(400).json({ error: 'Formato de ID inválido' });
+
+  // Validar ID de cliente
+  if (clienteId) {
+    if (!mongoose.Types.ObjectId.isValid(clienteId)) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Formato de ID de cliente inválido'
+      });
     }
-    query.cliente = new mongoose.Types.ObjectId(cliente);
+    query.cliente = new mongoose.Types.ObjectId(clienteId);
   }
 
   // Cambiar la condición del filtro saldoPendiente
