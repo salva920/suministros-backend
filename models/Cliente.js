@@ -56,6 +56,23 @@ const clienteSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  deudaTotal: {  // Nuevo campo calculado
+    type: Number,
+    default: 0
+  },
+  ultimaCompra: {  // Nuevo campo útil
+    type: Date
+  }
+});
+
+// Middleware para actualizar deuda automáticamente ✅
+clienteSchema.pre('save', function(next) {
+  if (this.isModified('categorias')) {
+    if (this.categorias.includes('Alto Riesgo')) {
+      this.municipioColor = '#ff0000'; // Rojo para alto riesgo
+    }
+  }
+  next();
 });
 
 // Índices para búsquedas frecuentes

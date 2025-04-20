@@ -85,7 +85,10 @@ router.get('/', async (req, res) => {
 
     // Construir query de filtrado
     const query = {};
-    if (cliente) query['cliente.rif'] = { $regex: cliente, $options: 'i' };
+    if (cliente && mongoose.Types.ObjectId.isValid(cliente)) {
+      query.cliente = cliente;
+    }
+
     
     // Cambiar la condición del filtro saldoPendiente
     if (saldoPendiente === 'true') { 
@@ -108,7 +111,7 @@ router.get('/', async (req, res) => {
       populate: [
         { 
           path: 'cliente', 
-          select: 'nombre rif'
+          select: 'nombre rif telefono email direccion municipio' // ✅ Todos los campos
         },
         { 
           path: 'productos.producto',

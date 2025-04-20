@@ -36,35 +36,50 @@ router.post('/', async (req, res) => {
 // Obtener clientes con paginación
 router.get('/', async (req, res) => {
   try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      sort = 'nombre', 
+      search 
+    } = req.query;
+
+    // Construir query de búsqueda
+    const query = {};
+    if (search) {
+      query.$or = [
+        { nombre: { $regex: search, $options: 'i' } },
+        { rif: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Opciones de paginación
     const options = {
-      page: parseInt(req.query.page) || 1,
-      limit: parseInt(req.query.limit) || 10,
-      sort: req.query.sort || 'nombre' // Puedes cambiar el campo de ordenamiento según tus necesidades
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sort,
+      select: 'nombre rif telefono email direccion municipio categorias municipioColor'
     };
 
-    const result = await Cliente.paginate({}, options); // Asegúrate de que el método paginate esté disponible en tu modelo
+    // Ejecutar consulta paginada
+    const result = await Cliente.paginate(query, options);
 
-    // Modificar la respuesta para incluir un array de clientes
+    // Construir respuesta
     res.json({
-      clientes: result.docs.map(doc => ({
-        _id: doc._id,
-        nombre: doc.nombre,
-        telefono: doc.telefono,
-        email: doc.email,
-        direccion: doc.direccion,
-        municipio: doc.municipio,
-        rif: doc.rif,
-        categorias: doc.categorias,
-        municipioColor: doc.municipioColor // Asegúrate de incluir todos los campos necesarios
-      })),
+      success: true,
+      clientes: result.docs,
       total: result.totalDocs,
       limit: result.limit,
       page: result.page,
-      totalPages: result.totalPages
+      pages: result.totalPages
     });
+    
   } catch (error) {
     console.error('Error al obtener clientes:', error);
-    res.status(500).json({ error: 'Error al obtener clientes' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener clientes',
+      error: error.message 
+    });
   }
 });
 

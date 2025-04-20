@@ -71,6 +71,21 @@ const ventaSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  estadoCredito: {  // Nuevo campo de estado
+    type: String,
+    enum: ['vigente', 'vencido', 'pagado'],
+    default: 'vigente'
+  }
+});
+
+// Actualizar estado automáticamente ✅
+ventaSchema.pre('save', function(next) {
+  if (this.saldoPendiente <= 0) {
+    this.estadoCredito = 'pagado';
+  } else if (moment().diff(this.fecha, 'days') > 30) {
+    this.estadoCredito = 'vencido';
+  }
+  next();
 });
 
 // Configurar paginación
