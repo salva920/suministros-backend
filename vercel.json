@@ -13,8 +13,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/server.js",
-      "methods": ["GET"] 
+      "dest": "/server.js"
     }
   ],
   "env": {

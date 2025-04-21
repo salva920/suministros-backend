@@ -4,7 +4,15 @@ const mongoose = require('mongoose');
 const path = require('path');
 require('dotenv').config();
 
+
 const app = express();
+
+
+// Manejo de solicitudes al favicon
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
+// Configuración de Mongoose para evitar advertencias de deprecación
+mongoose.set('strictQuery', false);
 
 const corsOptions = {
   origin: 'https://suministros-frontend.vercel.app',
@@ -69,16 +77,18 @@ app.use((req, res, next) => {
 
 // Servir archivos estáticos desde la carpeta build
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../frontend/build')));
-
-  // Manejar todas las demás solicitudes redirigiendo a index.html
+  const __dirname = path.resolve();
+  app.use(express.static(path.join(__dirname, 'frontend/build')));
+  
+  // Ruta para el frontend
+  app.get('/', (req, res) => {
+    res.sendFile(path.resolve(__dirname, 'frontend', 'build', 'index.html'));
+  });
+  
+  // Manejo de rutas no encontradas en producción
   app.get('*', (req, res) => {
-    // Verificar primero si la solicitud es para la API
-    if (!req.path.startsWith('/api/')) {
-      res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
-    } else {
-      // Si es una ruta de API no encontrada, devolver 404
-      res.status(404).json({ message: 'API endpoint not found' });
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.resolve(__dirname, 'frontend', 'build', 'index.html'));
     }
   });
 }
