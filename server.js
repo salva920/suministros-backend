@@ -75,23 +75,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Servir archivos estáticos desde la carpeta build
-if (process.env.NODE_ENV === 'production') {
-  const __dirname = path.resolve();
-  app.use(express.static(path.join(__dirname, 'frontend/build')));
-  
-  // Ruta para el frontend
-  app.get('/', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'frontend', 'build', 'index.html'));
-  });
-  
-  // Manejo de rutas no encontradas en producción
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(path.resolve(__dirname, 'frontend', 'build', 'index.html'));
-    }
-  });
-}
 // Manejar favicon
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
