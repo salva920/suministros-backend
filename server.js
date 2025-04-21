@@ -100,3 +100,4 @@ app.listen(PORT, () => {
 
 // Exportación para Vercel
 module.exports = app;
+
