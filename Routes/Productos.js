@@ -41,11 +41,15 @@ router.post('/', async (req, res) => {
     };
 
     const errors = [];
-    Object.entries(requiredFields).forEach(([field, message]) => {
-      if (!req.body[field] || (typeof req.body[field] === 'number' && req.body[field] <= 0)) {
-        errors.push({ field, message });
-      }
-    });
+    // Validación correcta para campos numéricos:
+  Object.entries(requiredFields).forEach(([field, message]) => {
+  const value = req.body[field];
+  const numericCheck = ['costoInicial', 'cantidad'].includes(field) 
+    ? (typeof value !== 'number' || value <= 0)
+    : !value;
+
+  if (numericCheck) errors.push({ field, message });
+});
 
     if (errors.length > 0) {
       return res.status(400).json({
@@ -263,18 +267,23 @@ router.delete('/:id', async (req, res) => {
 
 // Endpoint específico para entradas de stock
 // En POST /:id/entradas
+// Modificar la ruta POST para usar la fecha recibida
 router.post('/:id/entradas', async (req, res) => {
   try {
     const producto = await Producto.findById(req.params.id);
     const cantidad = Number(req.body.cantidad) || 0;
+    const fechaHora = req.body.fechaHora ? new Date(req.body.fechaHora) : new Date();
 
-    // Guardar stock anterior antes de modificarlo
+    // Validar fecha
+    if (isNaN(fechaHora.getTime())) {
+      return res.status(400).json({ message: 'Fecha inválida' });
+    }
+
     const stockAnterior = producto.stock;
     
     producto.stock += cantidad;
     await producto.save();
     
-    // Registrar en el historial con los datos correctos
     await Historial.create({
       producto: producto._id,
       nombreProducto: producto.nombre,
@@ -283,7 +292,7 @@ router.post('/:id/entradas', async (req, res) => {
       cantidad: cantidad,
       stockAnterior: stockAnterior,
       stockNuevo: producto.stock,
-      fecha: new Date()
+      fecha: fechaHora // Usar la fecha recibida del frontend
     });
     
     res.json(producto);
@@ -292,4 +301,6 @@ router.post('/:id/entradas', async (req, res) => {
     res.status(500).json({ message: 'Error en entrada de stock' });
   }
 });
+
+
 module.exports = router;

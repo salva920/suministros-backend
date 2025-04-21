@@ -87,8 +87,6 @@ const productoSchema = new mongoose.Schema({
   timestamps: false
 });
 
-
-
 // Aplicar el plugin de paginación
 productoSchema.plugin(mongoosePaginate);
 
