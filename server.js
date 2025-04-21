@@ -92,6 +92,8 @@ if (process.env.NODE_ENV === 'production') {
     }
   });
 }
+// Manejar favicon
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 // Manejo global de errores
 app.use((err, req, res, next) => {
