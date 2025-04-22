@@ -209,7 +209,14 @@ router.put('/:id', async (req, res) => {
 // Eliminar una venta (DELETE /api/ventas/:id)
 router.delete('/:id', async (req, res) => {
   try {
-    const ventaEliminada = await Venta.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
+
+    // Validación del ID
+    if (!mongoose.Types.ObjectId.isValid(id)) { // ✅ Validación correcta en backend
+      return res.status(400).json({ message: 'ID inválido' });
+    }
+
+    const ventaEliminada = await Venta.findByIdAndDelete(id);
 
     if (!ventaEliminada) {
       return res.status(404).json({ message: 'Venta no encontrada' });
