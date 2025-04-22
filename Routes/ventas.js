@@ -3,7 +3,6 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Venta = require('../models/Venta');
 const Producto = require('../models/Producto');
-const mongoose = require('mongoose');
 const moment = require('moment'); // Asegúrate de que esta línea esté presente
 
 // Crear una nueva venta (POST /api/ventas)
