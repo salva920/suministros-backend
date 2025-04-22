@@ -71,60 +71,65 @@ router.post('/', async (req, res) => {
 
 // Obtener todas las ventas (GET /api/ventas)
 router.get('/', async (req, res) => {
+  const { 
+    page = 1, 
+    limit = 10, 
+    sort = 'fecha', 
+    order = 'desc',
+    cliente,
+    saldoPendiente,
+    fechaInicio,
+    fechaFin
+  } = req.query;
+
+  // Validación de ID
+  if (cliente && !mongoose.Types.ObjectId.isValid(cliente)) {
+    return res.status(400).json({ 
+      success: false,
+      error: "ID de cliente inválido" 
+    });
+  }
+
+  // Construir query de filtrado
+  const query = {};
+
+  // Validar ID de cliente
+  if (cliente) {
+    query.cliente = new mongoose.Types.ObjectId(cliente);
+  }
+
+  // Cambiar la condición del filtro saldoPendiente
+  if (saldoPendiente === 'true') { 
+    query.saldoPendiente = { $gt: 0 }; // Solo mostrar ventas con saldo pendiente
+  } else if (saldoPendiente === 'false') {
+    query.saldoPendiente = { $lte: 0 }; // Mostrar ventas sin saldo pendiente
+  } // Si saldoPendiente no está definido, no se aplica filtro
+
+  // Filtro por fechas
+  if (fechaInicio || fechaFin) {
+    query.fecha = {};
+    if (fechaInicio) query.fecha.$gte = new Date(fechaInicio);
+    if (fechaFin) query.fecha.$lte = new Date(fechaFin);
+  }
+
+  const options = {
+    page: parseInt(page),
+    limit: parseInt(limit),
+    sort: { [sort]: order === 'asc' ? 1 : -1 },
+    populate: [
+      { 
+        path: 'cliente', 
+        select: 'nombre rif telefono email direccion municipio' // ✅ Todos los campos
+      },
+      { 
+        path: 'productos.producto',
+        select: 'nombre costoFinal'
+      }
+    ],
+    select: '-__v'
+  };
+
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      sort = 'fecha', 
-      order = 'desc',
-      cliente,
-      saldoPendiente,
-      fechaInicio,
-      fechaFin
-    } = req.query;
-
-    // Validación de cliente como ObjectId
-    if (cliente && !mongoose.Types.ObjectId.isValid(cliente)) {
-      return res.status(400).json({ 
-        success: false,
-        error: "ID de cliente inválido" 
-      });
-    }
-
-    // Construir query de filtrado
-    const query = cliente ? { cliente: new mongoose.Types.ObjectId(cliente) } : {};
-
-    // Cambiar la condición del filtro saldoPendiente
-    if (saldoPendiente === 'true') { 
-      query.saldoPendiente = { $gt: 0 }; // Solo mostrar ventas con saldo pendiente
-    } else if (saldoPendiente === 'false') {
-      query.saldoPendiente = { $lte: 0 }; // Mostrar ventas sin saldo pendiente
-    } // Si saldoPendiente no está definido, no se aplica filtro
-
-    // Filtro por fechas
-    if (fechaInicio || fechaFin) {
-      query.fecha = {};
-      if (fechaInicio) query.fecha.$gte = new Date(fechaInicio);
-      if (fechaFin) query.fecha.$lte = new Date(fechaFin);
-    }
-
-    const options = {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: { [sort]: order === 'asc' ? 1 : -1 },
-      populate: [
-        { 
-          path: 'cliente', 
-          select: 'nombre rif telefono email direccion municipio' // ✅ Todos los campos
-        },
-        { 
-          path: 'productos.producto',
-          select: 'nombre costoFinal'
-        }
-      ],
-      select: '-__v'
-    };
-
     const result = await Venta.paginate(query, options);
 
     // Calcular total de deudas
@@ -143,10 +148,7 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener las ventas:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Error al obtener las ventas' 
-    });
+    res.status(500).json({ error: 'Error al obtener las ventas' });
   }
 });
 
