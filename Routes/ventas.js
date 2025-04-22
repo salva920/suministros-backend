@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Venta = require('../models/Venta');
 const Producto = require('../models/Producto');
+const mongoose = require('mongoose');
 const moment = require('moment'); // Asegúrate de que esta línea esté presente
 
 // Crear una nueva venta (POST /api/ventas)
@@ -90,7 +91,7 @@ router.get('/', async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(clienteId)) {
       return res.status(400).json({ 
         success: false,
-        error: 'Formato de ID de cliente inválido'
+        error: 'Formato de ID de cliente inválido' 
       });
     }
     query.cliente = new mongoose.Types.ObjectId(clienteId);
