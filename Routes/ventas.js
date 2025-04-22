@@ -1,7 +1,6 @@
 const express = require('express');
-const mongoose = require('mongoose'); 
 const router = express.Router();
-const mongoose = require('mongoose');
+const mongoose = require('mongoose'); 
 const Venta = require('../models/Venta');
 const Producto = require('../models/Producto');
 const moment = require('moment'); // Asegúrate de que esta línea esté presente
