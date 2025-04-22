@@ -71,63 +71,60 @@ router.post('/', async (req, res) => {
 
 // Obtener todas las ventas (GET /api/ventas)
 router.get('/', async (req, res) => {
-  const { 
-    page = 1, 
-    limit = 10, 
-    sort = 'fecha', 
-    order = 'desc',
-    cliente: clienteId,
-    saldoPendiente,
-    fechaInicio,
-    fechaFin
-  } = req.query;
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      sort = 'fecha', 
+      order = 'desc',
+      cliente,
+      saldoPendiente,
+      fechaInicio,
+      fechaFin
+    } = req.query;
 
-  // Construir query de filtrado
-  const query = {};
-
-  // Validar ID de cliente
-  if (clienteId) {
-    if (!mongoose.Types.ObjectId.isValid(clienteId)) {
+    // Validación de cliente como ObjectId
+    if (cliente && !mongoose.Types.ObjectId.isValid(cliente)) {
       return res.status(400).json({ 
         success: false,
-        error: 'Formato de ID de cliente inválido' 
+        error: "ID de cliente inválido" 
       });
     }
-    query.cliente = new mongoose.Types.ObjectId(clienteId);
-  }
 
-  // Cambiar la condición del filtro saldoPendiente
-  if (saldoPendiente === 'true') { 
-    query.saldoPendiente = { $gt: 0 }; // Solo mostrar ventas con saldo pendiente
-  } else if (saldoPendiente === 'false') {
-    query.saldoPendiente = { $lte: 0 }; // Mostrar ventas sin saldo pendiente
-  } // Si saldoPendiente no está definido, no se aplica filtro
+    // Construir query de filtrado
+    const query = cliente ? { cliente: new mongoose.Types.ObjectId(cliente) } : {};
 
-  // Filtro por fechas
-  if (fechaInicio || fechaFin) {
-    query.fecha = {};
-    if (fechaInicio) query.fecha.$gte = new Date(fechaInicio);
-    if (fechaFin) query.fecha.$lte = new Date(fechaFin);
-  }
+    // Cambiar la condición del filtro saldoPendiente
+    if (saldoPendiente === 'true') { 
+      query.saldoPendiente = { $gt: 0 }; // Solo mostrar ventas con saldo pendiente
+    } else if (saldoPendiente === 'false') {
+      query.saldoPendiente = { $lte: 0 }; // Mostrar ventas sin saldo pendiente
+    } // Si saldoPendiente no está definido, no se aplica filtro
 
-  const options = {
-    page: parseInt(page),
-    limit: parseInt(limit),
-    sort: { [sort]: order === 'asc' ? 1 : -1 },
-    populate: [
-      { 
-        path: 'cliente', 
-        select: 'nombre rif telefono email direccion municipio' // ✅ Todos los campos
-      },
-      { 
-        path: 'productos.producto',
-        select: 'nombre costoFinal'
-      }
-    ],
-    select: '-__v'
-  };
+    // Filtro por fechas
+    if (fechaInicio || fechaFin) {
+      query.fecha = {};
+      if (fechaInicio) query.fecha.$gte = new Date(fechaInicio);
+      if (fechaFin) query.fecha.$lte = new Date(fechaFin);
+    }
 
-  try {
+    const options = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sort: { [sort]: order === 'asc' ? 1 : -1 },
+      populate: [
+        { 
+          path: 'cliente', 
+          select: 'nombre rif telefono email direccion municipio' // ✅ Todos los campos
+        },
+        { 
+          path: 'productos.producto',
+          select: 'nombre costoFinal'
+        }
+      ],
+      select: '-__v'
+    };
+
     const result = await Venta.paginate(query, options);
 
     // Calcular total de deudas
@@ -146,7 +143,10 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Error al obtener las ventas:', error);
-    res.status(500).json({ error: 'Error al obtener las ventas' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Error al obtener las ventas' 
+    });
   }
 });
 
