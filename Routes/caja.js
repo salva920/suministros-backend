@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Caja = require('../models/caja');
+const moment = require('moment-timezone');
 
 // En routes/caja.js
 router.get('/', async (req, res) => {
@@ -37,8 +38,15 @@ router.get('/transacciones', async (req, res) => {
       populate: { path: 'transacciones' }
     });
 
+    const formatted = result.docs[0].transacciones.map(t => ({
+      ...t,
+      fecha: moment.utc(t.fecha)
+        .tz('America/Caracas')
+        .format('DD/MM/YYYY HH:mm')
+    }));
+
     res.json({
-      transacciones: result.docs[0].transacciones,
+      transacciones: formatted,
       total: result.totalDocs,
       totalPages: result.totalPages
     });
