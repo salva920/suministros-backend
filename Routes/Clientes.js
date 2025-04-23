@@ -110,7 +110,7 @@ router.put('/:id', async (req, res) => {
     if (req.body.rif) {
       const clienteExistente = await Cliente.findOne({ 
         rif: req.body.rif, 
-        _id: { $ne: req.params.id } 
+        _id: { $ne: new mongoose.Types.ObjectId(req.params.id) } // Convertir a ObjectId
       });
       if (clienteExistente) {
         return res.status(400).json({ message: 'El RIF ya está registrado en otro cliente' });
