@@ -90,7 +90,7 @@ const crearTransaccion = (fecha, concepto, moneda, entrada, salida, tasaCambio, 
   const salidaNum = parseFloat(salida) || 0;
   
   return {
-    fecha: moment.tz(fecha, 'YYYY-MM-DD', 'America/Caracas').startOf('day').toDate(),
+    fecha: moment.tz(fecha, 'America/Caracas').toDate(),
     concepto,
     moneda,
     entrada: entradaNum,
