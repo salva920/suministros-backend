@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const Caja = require('../models/caja');
-const Transaccion = require('../models/transaccion');
 const moment = require('moment-timezone');
 
 // En routes/caja.js
