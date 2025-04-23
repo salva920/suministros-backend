@@ -93,6 +93,16 @@ ventaSchema.pre('save', function(next) {
 // Configurar paginación
 ventaSchema.plugin(mongoosePaginate);
 
+// Transformación de IDs al convertir a JSON
+ventaSchema.set('toJSON', {
+  virtuals: true,
+  transform: (doc, ret) => {
+    ret.id = ret._id.toString(); // Crear un campo 'id' a partir de '_id'
+    delete ret._id; // Eliminar el campo '_id'
+    delete ret.__v; // Eliminar el campo '__v'
+  }
+});
+
 const Venta = mongoose.model('Venta', ventaSchema);
 
 module.exports = Venta;

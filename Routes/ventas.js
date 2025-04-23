@@ -119,11 +119,20 @@ router.get('/', async (req, res) => {
     populate: [
       { 
         path: 'cliente', 
-        select: 'nombre rif telefono email direccion municipio' // ✅ Todos los campos
+        select: 'nombre rif telefono email direccion municipio',
+        transform: (doc) => doc ? { 
+          id: doc._id.toString(), 
+          ...doc.toObject() 
+        } : null 
       },
       { 
         path: 'productos.producto',
-        select: 'nombre costoFinal'
+        select: 'nombre costoFinal', 
+          transform: (doc) => doc ? { 
+          id: doc._id.toString(), 
+          nombre: doc.nombre,
+          costoFinal: doc.costoFinal 
+        } : null
       }
     ],
     select: '-__v'
