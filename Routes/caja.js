@@ -77,7 +77,7 @@ router.post('/transacciones', async (req, res) => {
     const nuevoSaldo = caja.saldos[moneda] + entradaNum - salidaNum;
     
     const nuevaTransaccion = {
-      fecha: new Date(fecha),
+      fecha:  new Date(fecha).toISOString(),
       concepto,
       moneda,
       entrada: entradaNum,
