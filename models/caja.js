@@ -1,11 +1,13 @@
 const mongoose = require('mongoose');
 const mongoosePaginate = require('mongoose-paginate-v2');
+const moment = require('moment-timezone');
 
 const transaccionSchema = new mongoose.Schema({
   fecha: {
     type: Date,
     required: true,
-    default: Date.now
+    default: () => moment().tz('America/Caracas').toDate(),
+    get: (v) => moment(v).tz('America/Caracas').format('YYYY-MM-DD HH:mm:ss')
   },
   concepto: {
     type: String,
@@ -29,6 +31,10 @@ const transaccionSchema = new mongoose.Schema({
     required: true
   }
 });
+
+// Habilitar getters en las queries
+transaccionSchema.set('toObject', { getters: true });
+transaccionSchema.set('toJSON', { getters: true });
 
 const cajaSchema = new mongoose.Schema({
   transacciones: [transaccionSchema],
