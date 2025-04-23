@@ -76,15 +76,15 @@ router.post('/transacciones', async (req, res) => {
 
     const nuevoSaldo = caja.saldos[moneda] + entradaNum - salidaNum;
     
-    const nuevaTransaccion = {
-      fecha: new Date(fecha),
+    const nuevaTransaccion = new Transaccion({
+      fecha: new Date(fecha).toISOString(),
       concepto,
       moneda,
       entrada: entradaNum,
       salida: salidaNum,
       saldo: nuevoSaldo,
       tasaCambio: tasa
-    };
+    });
 
     // Actualización atómica
     const updated = await Caja.findOneAndUpdate(
