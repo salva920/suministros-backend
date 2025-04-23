@@ -6,8 +6,7 @@ const transaccionSchema = new mongoose.Schema({
   fecha: {
     type: Date,
     required: true,
-    default: () => moment().tz('America/Caracas').toDate(),
-    get: (v) => moment(v).tz('America/Caracas').format('YYYY-MM-DD HH:mm:ss')
+    get: (v) => moment.utc(v).tz('America/Caracas').format('YYYY-MM-DD HH:mm:ss')
   },
   concepto: {
     type: String,
