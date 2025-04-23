@@ -3,6 +3,7 @@ const router = express.Router();
 const Producto = require('../models/Producto');
 const mongoose = require('mongoose');
 const Historial = require('../models/historial');
+const moment = require('moment');
 
 // Middleware para manejar errores
 const handleErrors = (res, error) => {
@@ -166,8 +167,15 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Convertir el ID a ObjectId
-    const objectId = mongoose.Types.ObjectId(id);
+    // Validación de fecha
+    if (!moment(req.body.fechaIngreso, moment.ISO_8601, true).isValid()) {
+      return res.status(400).json({
+        message: 'Formato de fecha inválido. Use ISO 8601 (YYYY-MM-DD)'
+      });
+    }
+
+    // Convertir fecha a objeto Date UTC
+    const fechaUTC = moment.utc(req.body.fechaIngreso).toDate();
 
     // Validación mejorada
     const requiredFields = {
@@ -196,7 +204,7 @@ router.put('/:id', async (req, res) => {
     const codigo = req.body.codigo.trim();
     const productoExistente = await Producto.findOne({
       codigo,
-      _id: { $ne: objectId }
+      _id: { $ne: id }
     });
 
     if (productoExistente) {
@@ -209,15 +217,20 @@ router.put('/:id', async (req, res) => {
     // Crear el objeto con los datos actualizados
     const datosActualizados = {
       ...req.body,
+      fechaIngreso: fechaUTC,
       stock: req.body.stock, // Asegurar que se actualice el stock
       cantidad: req.body.cantidad // Actualizar cantidad si es necesario
     };
 
     // Actualizar el producto en la base de datos
     const productoActualizado = await Producto.findByIdAndUpdate(
-      objectId,
+      id,
       datosActualizados,
-      { new: true, runValidators: true }
+      { 
+        new: true, 
+        runValidators: true,
+        context: 'query'
+      }
     );
 
     if (!productoActualizado) {
@@ -235,6 +248,15 @@ router.put('/:id', async (req, res) => {
     res.json(productoActualizado.toObject());
   } catch (error) {
     console.error('Error al actualizar:', error);
+    
+    // Mejor manejo de errores de fecha
+    if (error.name === 'CastError' && error.path === 'fechaIngreso') {
+      return res.status(400).json({
+        message: 'Formato de fecha inválido',
+        details: 'Use el formato YYYY-MM-DD'
+      });
+    }
+    
     res.status(500).json({ 
       message: 'Error interno del servidor',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
