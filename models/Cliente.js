@@ -31,7 +31,7 @@ const clienteSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    match: /^[VEJG]-?\d{7,9}$/ // Regex mejorado para permitir guiones
+    match: /^[VEJG]-?\d{8,9}$/ // Regex mejorado para permitir guiones
   },
   categorias: [{
     type: String,
