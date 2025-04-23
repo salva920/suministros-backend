@@ -3,11 +3,19 @@ const router = express.Router();
 const Caja = require('../models/caja');
 const moment = require('moment-timezone');
 
-// Obtener documento de caja principal
+// Ruta para obtener la caja
 router.get('/', async (req, res) => {
   try {
+    // Buscar la caja existente o crear una nueva si no existe
     const caja = await Caja.findOne() || await Caja.create({ transacciones: [], saldos: { USD: 0, Bs: 0 }});
-    res.json(caja);
+    
+    // Asegurar que la respuesta tenga la estructura correcta
+    res.json({
+      transacciones: caja.transacciones,
+      saldos: caja.saldos,
+      _id: caja._id,
+      __v: caja.__v
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener la caja', error: error.message });
   }
