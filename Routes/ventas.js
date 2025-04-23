@@ -71,9 +71,16 @@ router.post('/', async (req, res) => {
 
 // Obtener todas las ventas (GET /api/ventas)
 router.get('/', async (req, res) => {
+  // Agregar validación de parámetro limit
+  if (req.query.limit && isNaN(parseInt(req.query.limit))) {
+    return res.status(400).json({ error: 'Parámetro limit inválido' });
+  }
+  
+  // Forzar mínimo 1 y máximo 1000 documentos
+  const limit = Math.min(Math.max(parseInt(req.query.limit || 10), 1), 1000);
+
   const { 
     page = 1, 
-    limit = 10, 
     sort = 'fecha', 
     order = 'desc',
     cliente,
@@ -114,7 +121,7 @@ router.get('/', async (req, res) => {
 
   const options = {
     page: parseInt(page),
-    limit: parseInt(limit),
+    limit: limit, // Usar el límite validado
     sort: { [sort]: order === 'asc' ? 1 : -1 },
     populate: [
       { 
@@ -128,7 +135,7 @@ router.get('/', async (req, res) => {
       { 
         path: 'productos.producto',
         select: 'nombre costoFinal', 
-          transform: (doc) => doc ? { 
+        transform: (doc) => doc ? { 
           id: doc._id.toString(), 
           nombre: doc.nombre,
           costoFinal: doc.costoFinal 
