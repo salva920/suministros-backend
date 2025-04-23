@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Caja = require('../models/caja');
+const Transaccion = require('../models/transaccion');
+const moment = require('moment-timezone');
 
 // En routes/caja.js
 router.get('/', async (req, res) => {
@@ -76,15 +78,15 @@ router.post('/transacciones', async (req, res) => {
 
     const nuevoSaldo = caja.saldos[moneda] + entradaNum - salidaNum;
     
-    const nuevaTransaccion = {
-      fecha:  new Date(fecha).toISOString(),
+    const nuevaTransaccion = new Transaccion({
+      fecha: moment(fecha).format(),
       concepto,
       moneda,
       entrada: entradaNum,
       salida: salidaNum,
       saldo: nuevoSaldo,
       tasaCambio: tasa
-    };
+    });
 
     // Actualización atómica
     const updated = await Caja.findOneAndUpdate(
