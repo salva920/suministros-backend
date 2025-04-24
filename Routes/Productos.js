@@ -271,7 +271,15 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/entradas', async (req, res) => {
   try {
     const producto = await Producto.findById(req.params.id);
+    if (!producto) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+    
     const cantidad = Number(req.body.cantidad) || 0;
+    if (cantidad <= 0) {
+      return res.status(400).json({ message: 'La cantidad debe ser mayor a 0' });
+    }
+    
     const fechaHora = req.body.fechaHora ? new Date(req.body.fechaHora) : new Date();
 
     // Validar fecha
@@ -279,11 +287,34 @@ router.post('/:id/entradas', async (req, res) => {
       return res.status(400).json({ message: 'Fecha inválida' });
     }
 
+    // Guardar valores anteriores para el historial
     const stockAnterior = producto.stock;
+    const cantidadAnterior = producto.cantidad;
     
+    // Actualizar tanto stock como cantidad
     producto.stock += cantidad;
+    producto.cantidad += cantidad; // Actualizar también la cantidad total
+    
+    // Si el costo es diferente, recalcular el costo final
+    if (req.body.costoUnitario && req.body.costoUnitario > 0) {
+      // Calcular nuevo costo promedio ponderado
+      const costoActualTotal = producto.costoInicial * cantidadAnterior;
+      const costoNuevoTotal = req.body.costoUnitario * cantidad;
+      const costoTotalCombinado = costoActualTotal + costoNuevoTotal;
+      
+      // Actualizar el costo inicial promedio
+      producto.costoInicial = costoTotalCombinado / producto.cantidad;
+      
+      // Recalcular costo final
+      producto.costoFinal = (producto.costoInicial * producto.cantidad + 
+                            producto.acarreo + producto.flete) / 
+                            producto.cantidad;
+    }
+    
+    // Guardar los cambios
     await producto.save();
     
+    // Registrar en el historial
     await Historial.create({
       producto: producto._id,
       nombreProducto: producto.nombre,
@@ -292,13 +323,14 @@ router.post('/:id/entradas', async (req, res) => {
       cantidad: cantidad,
       stockAnterior: stockAnterior,
       stockNuevo: producto.stock,
-      fecha: fechaHora // Usar la fecha recibida del frontend
+      fecha: fechaHora, // Usar la fecha recibida del frontend
+      detalles: req.body.detalles || 'Entrada de stock'
     });
     
     res.json(producto);
   } catch (error) {
     console.error('Error en entrada de stock:', error);
-    res.status(500).json({ message: 'Error en entrada de stock' });
+    res.status(500).json({ message: 'Error en entrada de stock', error: error.message });
   }
 });
 
