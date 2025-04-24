@@ -165,96 +165,72 @@ router.get('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Convertir el ID a ObjectId
     const objectId = mongoose.Types.ObjectId(id);
 
-    // Obtener el producto actual para comparar el stock
+    // Obtener el producto original completo
     const productoOriginal = await Producto.findById(objectId);
     if (!productoOriginal) {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
-    // Guardar el stock original para el historial
+    // Guardar valores originales para comparación
     const stockOriginal = productoOriginal.stock;
+    const cantidadOriginal = productoOriginal.cantidad;
 
-    // Validación mejorada
-    const requiredFields = {
-      nombre: 'Nombre es requerido',
-      codigo: 'Código es requerido',
-      costoInicial: 'Costo inicial debe ser mayor a 0',
-      cantidad: 'Cantidad debe ser mayor a 0',
-      fechaIngreso: 'Fecha de ingreso es requerida'
-    };
-
-    const errors = [];
-    Object.entries(requiredFields).forEach(([field, message]) => {
-      if (!req.body[field] || (typeof req.body[field] === 'number' && req.body[field] <= 0)) {
-        errors.push({ field, message });
-      }
-    });
-
-    if (errors.length > 0) {
-      return res.status(400).json({
-        message: 'Error de validación',
-        errors: errors.map(e => e.message)
-      });
-    }
-
-    // Verificar código único excluyendo el actual
-    const codigo = req.body.codigo.trim();
-    const productoExistente = await Producto.findOne({
-      codigo,
-      _id: { $ne: objectId }
-    });
-
-    if (productoExistente) {
-      return res.status(400).json({
-        message: `El código ${codigo} ya existe`,
-        field: 'codigo'
-      });
-    }
-
-    // Crear el objeto con los datos actualizados
+    // Crear objeto con datos actualizados
     const datosActualizados = {
       ...req.body,
-      stock: req.body.stock, // Asegurar que se actualice el stock
-      cantidad: req.body.cantidad // Actualizar cantidad si es necesario
+      fechaIngreso: moment.utc(req.body.fechaIngreso).toDate()
     };
 
-    // Actualizar el producto en la base de datos
+    // Si la cantidad está siendo actualizada, validar y ajustar el stock
+    if (req.body.cantidad !== undefined && req.body.cantidad !== cantidadOriginal) {
+      console.log(`Cantidad cambiada de ${cantidadOriginal} a ${req.body.cantidad}`);
+      
+      // Calcular diferencia y ajustar stock si es necesario
+      const diferenciaCantidad = req.body.cantidad - cantidadOriginal;
+      
+      // Si la cantidad aumentó, aumentar también el stock
+      if (diferenciaCantidad > 0) {
+        datosActualizados.stock = stockOriginal + diferenciaCantidad;
+      } 
+      // Si disminuyó y hay suficiente stock, reducir el stock
+      else if (diferenciaCantidad < 0 && stockOriginal >= Math.abs(diferenciaCantidad)) {
+        datosActualizados.stock = stockOriginal + diferenciaCantidad;
+      } 
+      // Si no hay suficiente stock, mantener el stock original y advertir
+      else if (diferenciaCantidad < 0) {
+        return res.status(400).json({
+          message: `No hay suficiente stock para reducir la cantidad. Stock actual: ${stockOriginal}`
+        });
+      }
+    }
+
+    // Actualizar el producto
     const productoActualizado = await Producto.findByIdAndUpdate(
       objectId,
       datosActualizados,
-      { 
-        new: true, 
-        runValidators: true,
-        context: 'query'
-      }
+      { new: true, runValidators: true }
     );
 
-    if (!productoActualizado) {
-      return res.status(404).json({ message: 'Producto no encontrado' });
-    }
-
-    // Verificar si el stock ha cambiado
+    // Registrar en historial si hubo cambio en el stock
     if (productoActualizado.stock !== stockOriginal) {
-      // Calcular la diferencia de stock
       const diferencia = productoActualizado.stock - stockOriginal;
-      const tipoOperacion = diferencia > 0 ? 'entrada' : 'salida';
+      const operacion = diferencia > 0 ? 'entrada' : 'salida';
       
-      // Crear entrada en el historial
       await Historial.create({
         producto: productoActualizado._id,
         nombreProducto: productoActualizado.nombre,
         codigoProducto: productoActualizado.codigo,
-        operacion: 'ajuste', // O 'entrada'/'salida' según prefieras
+        operacion: operacion,
         cantidad: Math.abs(diferencia),
         stockAnterior: stockOriginal,
         stockNuevo: productoActualizado.stock,
         fecha: new Date(),
-        detalles: 'Ajuste manual de inventario'
+        detalles: 'Ajuste mediante edición de producto'
       });
+      
+      console.log(`Historial creado: ${operacion} de ${Math.abs(diferencia)} unidades`);
     }
 
     res.json(productoActualizado.toObject());
@@ -266,7 +242,6 @@ router.put('/:id', async (req, res) => {
     });
   }
 });
-
 // Eliminar un producto
 router.delete('/:id', async (req, res) => {
   try {
