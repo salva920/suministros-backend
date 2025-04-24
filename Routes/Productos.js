@@ -227,7 +227,7 @@ router.put('/:id', async (req, res) => {
 
     // Actualizar el producto en la base de datos
     const productoActualizado = await Producto.findByIdAndUpdate(
-      id,
+      objectId,
       datosActualizados,
       { 
         new: true, 
