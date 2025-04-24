@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const mongoosePaginate = require('mongoose-paginate-v2');
+const moment = require('moment');
 
 const productoSchema = new mongoose.Schema({
   nombre: {
@@ -64,12 +65,11 @@ const productoSchema = new mongoose.Schema({
   fechaIngreso: {
     type: Date,
     required: true,
-    set: (value) => {
-      // Convertir a Date si es un string
-      if (typeof value === 'string') {
-        return new Date(value);
-      }
-      return value;
+    validate: {
+      validator: function(v) {
+        return moment(v, moment.ISO_8601, true).isValid(); // Validar formato ISO 8601
+      },
+      message: 'Formato de fecha inválido (YYYY-MM-DD)'
     },
     contadorMes: {  // <- Nuevo campo necesario
       type: Number,

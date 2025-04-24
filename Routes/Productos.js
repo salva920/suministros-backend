@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const Producto = require('../models/Producto');
-const mongoose = require('mongoose');
 const Historial = require('../models/historial');
 const moment = require('moment');
+const mongoose = require('mongoose');
 
 // Middleware para manejar errores
 const handleErrors = (res, error) => {
@@ -167,6 +167,9 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Convertir el ID a ObjectId
+    const objectId = mongoose.Types.ObjectId(id);
+
     // Validación de fecha
     if (!moment(req.body.fechaIngreso, moment.ISO_8601, true).isValid()) {
       return res.status(400).json({
@@ -204,7 +207,7 @@ router.put('/:id', async (req, res) => {
     const codigo = req.body.codigo.trim();
     const productoExistente = await Producto.findOne({
       codigo,
-      _id: { $ne: id }
+      _id: { $ne: objectId }
     });
 
     if (productoExistente) {
