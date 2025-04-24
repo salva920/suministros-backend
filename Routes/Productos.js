@@ -137,18 +137,26 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ message: 'ID de producto inválido' });
     }
     
+    // Buscar el producto por ID
     const producto = await Producto.findById(id);
+    
+    // Verificar si se encontró el producto
     if (!producto) {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
     
-    // Devolver el producto encontrado
-    res.json(producto);
+    // Convertir el documento mongoose a un objeto plano
+    const productoObjeto = producto.toObject();
+    
+    // Agregar propiedad id (además de _id) para compatibilidad
+    productoObjeto.id = productoObjeto._id.toString();
+    
+    res.json(productoObjeto);
   } catch (error) {
-    console.error('Error al obtener producto:', error);
+    console.error('Error al obtener producto por ID:', error);
     res.status(500).json({ 
-      message: 'Error interno del servidor',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Error al obtener producto', 
+      error: error.message 
     });
   }
 });
