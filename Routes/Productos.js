@@ -169,6 +169,15 @@ router.put('/:id', async (req, res) => {
     // Convertir el ID a ObjectId
     const objectId = mongoose.Types.ObjectId(id);
 
+    // Obtener el producto actual para comparar el stock
+    const productoOriginal = await Producto.findById(objectId);
+    if (!productoOriginal) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+
+    // Guardar el stock original para el historial
+    const stockOriginal = productoOriginal.stock;
+
     // Validación mejorada
     const requiredFields = {
       nombre: 'Nombre es requerido',
@@ -217,19 +226,35 @@ router.put('/:id', async (req, res) => {
     const productoActualizado = await Producto.findByIdAndUpdate(
       objectId,
       datosActualizados,
-      { new: true, runValidators: true }
+      { 
+        new: true, 
+        runValidators: true,
+        context: 'query'
+      }
     );
 
     if (!productoActualizado) {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
-    // Registrar ajustes de stock
-    if (req.body.stock !== undefined && req.body.stock !== productoActualizado.stock) {
-      const originalStock = productoActualizado.stock - (req.body.stock - productoActualizado.stock);
-      await registrarEnHistorial(productoActualizado, 'ajuste', 
-        productoActualizado.stock - originalStock
-      );
+    // Verificar si el stock ha cambiado
+    if (productoActualizado.stock !== stockOriginal) {
+      // Calcular la diferencia de stock
+      const diferencia = productoActualizado.stock - stockOriginal;
+      const tipoOperacion = diferencia > 0 ? 'entrada' : 'salida';
+      
+      // Crear entrada en el historial
+      await Historial.create({
+        producto: productoActualizado._id,
+        nombreProducto: productoActualizado.nombre,
+        codigoProducto: productoActualizado.codigo,
+        operacion: 'ajuste', // O 'entrada'/'salida' según prefieras
+        cantidad: Math.abs(diferencia),
+        stockAnterior: stockOriginal,
+        stockNuevo: productoActualizado.stock,
+        fecha: new Date(),
+        detalles: 'Ajuste manual de inventario'
+      });
     }
 
     res.json(productoActualizado.toObject());
