@@ -67,6 +67,9 @@ app.use('/api', require('./Routes/TasaCambio'));
 
 app.use('/api/ventas', require('./Routes/ventas'));
 
+app.use('/api/facturaPendiente', require('./Routes/FacturaPendiente'));
+
+
 // Configurar CORS para permitir solicitudes desde el frontend
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', 'https://suministros-frontend.vercel.app');

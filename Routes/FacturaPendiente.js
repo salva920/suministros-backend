@@ -2,19 +2,82 @@ const express = require('express');
 const FacturaPendiente = require('../models/FacturaPendiente');
 const router = express.Router();
 
-// Obtener todas las facturas pendientes
-router.get('/facturas-pendientes', async (req, res) => {
+// Obtener facturas pendientes con paginación
+router.get('/', async (req, res) => {
   try {
-    const facturas = await FacturaPendiente.find().sort({ fecha: -1 });
-    res.json(facturas);
+    const { 
+      page = 1, 
+      limit = 10, 
+      estado, 
+      fechaDesde, 
+      fechaHasta,
+      busqueda
+    } = req.query;
+    
+    // Construir objeto de consulta
+    const query = {};
+    
+    // Filtrar por estado
+    if (estado === 'pendientes') {
+      query.saldo = { $gt: 0 };
+    } else if (estado === 'pagadas') {
+      query.saldo = 0;
+    } else if (estado === 'parciales') {
+      query.abono = { $gt: 0 };
+      query.saldo = { $gt: 0 };
+    }
+    
+    // Filtrar por rango de fechas
+    if (fechaDesde || fechaHasta) {
+      query.fecha = {};
+      if (fechaDesde) {
+        query.fecha.$gte = new Date(fechaDesde);
+      }
+      if (fechaHasta) {
+        const fechaHastaObj = new Date(fechaHasta);
+        fechaHastaObj.setHours(23, 59, 59, 999);
+        query.fecha.$lte = fechaHastaObj;
+      }
+    }
+    
+    // Filtrar por término de búsqueda
+    if (busqueda) {
+      const regex = new RegExp(busqueda, 'i');
+      query.$or = [
+        { concepto: regex },
+        { proveedor: regex },
+        { numeroFactura: regex }
+      ];
+    }
+    
+    // Opciones de paginación
+    const options = {
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      sort: { fecha: -1 }
+    };
+    
+    const result = await FacturaPendiente.paginate(query, options);
+    
+    res.json({
+      facturas: result.docs,
+      totalDocs: result.totalDocs,
+      totalPages: result.totalPages,
+      currentPage: result.page,
+      hasNextPage: result.hasNextPage,
+      hasPrevPage: result.hasPrevPage,
+      nextPage: result.nextPage,
+      prevPage: result.prevPage
+    });
   } catch (error) {
+    console.error('Error al obtener facturas pendientes:', error);
     res.status(500).json({ message: 'Error al obtener las facturas pendientes' });
   }
 });
 
 // Crear una nueva factura pendiente
-router.post('/facturas-pendientes', async (req, res) => {
-  const { fecha, concepto, monto } = req.body;
+router.post('/', async (req, res) => {
+  const { fecha, concepto, proveedor, numeroFactura, monto } = req.body;
 
   if (!concepto || !monto) {
     return res.status(400).json({ message: 'Concepto y monto son requeridos' });
@@ -24,18 +87,21 @@ router.post('/facturas-pendientes', async (req, res) => {
     const nuevaFactura = new FacturaPendiente({
       fecha: fecha || new Date(),
       concepto,
+      proveedor,
+      numeroFactura,
       monto
     });
     
     await nuevaFactura.save();
     res.status(201).json(nuevaFactura);
   } catch (error) {
+    console.error('Error al crear factura pendiente:', error);
     res.status(500).json({ message: 'Error al crear la factura pendiente' });
   }
 });
 
 // Registrar un abono
-router.post('/facturas-pendientes/:id/abonos', async (req, res) => {
+router.post('/:id/abonos', async (req, res) => {
   const { monto } = req.body;
   const facturaId = req.params.id;
 
@@ -54,12 +120,53 @@ router.post('/facturas-pendientes/:id/abonos', async (req, res) => {
       return res.status(400).json({ message: 'El abono supera el saldo' });
     }
     
-    factura.abono += monto;
+    factura.abono += parseFloat(monto);
     await factura.save();
     
     res.status(200).json(factura);
   } catch (error) {
+    console.error('Error al registrar abono:', error);
     res.status(500).json({ message: 'Error al registrar el abono' });
+  }
+});
+
+// Eliminar una factura pendiente
+router.delete('/:id', async (req, res) => {
+  try {
+    const facturaId = req.params.id;
+    const factura = await FacturaPendiente.findByIdAndDelete(facturaId);
+    
+    if (!factura) {
+      return res.status(404).json({ message: 'Factura no encontrada' });
+    }
+    
+    res.status(200).json({ message: 'Factura eliminada correctamente' });
+  } catch (error) {
+    console.error('Error al eliminar factura:', error);
+    res.status(500).json({ message: 'Error al eliminar la factura' });
+  }
+});
+
+// Actualizar una factura pendiente
+router.put('/:id', async (req, res) => {
+  try {
+    const facturaId = req.params.id;
+    const { concepto, proveedor, numeroFactura, monto, fecha } = req.body;
+    
+    const facturaActualizada = await FacturaPendiente.findByIdAndUpdate(
+      facturaId,
+      { concepto, proveedor, numeroFactura, monto, fecha },
+      { new: true, runValidators: true }
+    );
+    
+    if (!facturaActualizada) {
+      return res.status(404).json({ message: 'Factura no encontrada' });
+    }
+    
+    res.status(200).json(facturaActualizada);
+  } catch (error) {
+    console.error('Error al actualizar factura:', error);
+    res.status(500).json({ message: 'Error al actualizar la factura' });
   }
 });
 

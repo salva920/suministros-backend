@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const mongoosePaginate = require('mongoose-paginate-v2');
 const Schema = mongoose.Schema;
 
 const facturaPendienteSchema = new Schema({
@@ -10,6 +11,14 @@ const facturaPendienteSchema = new Schema({
   concepto: {
     type: String,
     required: true,
+    trim: true
+  },
+  proveedor: {
+    type: String,
+    trim: true
+  },
+  numeroFactura: {
+    type: String,
     trim: true
   },
   monto: {
@@ -35,5 +44,8 @@ facturaPendienteSchema.pre('save', function(next) {
   this.saldo = Math.max(0, this.monto - this.abono);
   next();
 });
+
+// Aplicar el plugin de paginación
+facturaPendienteSchema.plugin(mongoosePaginate);
 
 module.exports = mongoose.model('FacturaPendiente', facturaPendienteSchema);
