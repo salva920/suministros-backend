@@ -69,7 +69,7 @@ app.use('/api/ventas', require('./Routes/ventas'));
 
 app.use('/api/facturaPendiente', require('./Routes/FacturaPendiente'));
 
-//app.use('/api/listaprecios', require('./Routes/listaPrecio'));
+app.use('/api/listaprecios', require('./Routes/ListaPrecio'));
 
 
 
