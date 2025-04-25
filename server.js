@@ -69,7 +69,7 @@ app.use('/api/ventas', require('./Routes/ventas'));
 
 app.use('/api/facturaPendiente', require('./Routes/FacturaPendiente'));
 
-app.use('/api/listaprecios', require('./Routes/ListaPrecio'));
+app.use('/api/listaprecios', require('./Routes/listaPrecio'));
 
 // Configurar CORS para permitir solicitudes desde el frontend
 app.use((req, res, next) => {
