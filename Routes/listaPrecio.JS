@@ -27,33 +27,26 @@ router.get('/', async (req, res) => {
     if (busqueda) {
       query.$or = [
         { nombreProducto: { $regex: busqueda, $options: 'i' } },
-        { codigoProducto: { $regex: busqueda, $options: 'i' } },
-        { descripcion: { $regex: busqueda, $options: 'i' } }
+        { codigoProducto: { $regex: busqueda, $options: 'i' } }
       ];
     }
     
-    // Configurar opciones de paginación
-    const options = {
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-      sort: { [ordenPor]: direccion === 'desc' ? -1 : 1 },
-      populate: {
-        path: 'producto',
-        select: 'nombre codigo stock costoFinal'
-      }
-    };
+    const listasPrecios = await ListaPrecio.find(query)
+      .sort({ [ordenPor]: direccion === 'desc' ? -1 : 1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .populate('producto', 'nombre codigo stock costoFinal');
     
-    const result = await ListaPrecio.paginate(query, options);
+    // Contar total de documentos para paginación
+    const total = await ListaPrecio.countDocuments(query);
     
     res.status(200).json({
-      listasPrecios: result.docs,
-      totalDocs: result.totalDocs,
-      totalPages: result.totalPages,
-      currentPage: result.page,
-      hasNextPage: result.hasNextPage,
-      hasPrevPage: result.hasPrevPage,
-      nextPage: result.nextPage,
-      prevPage: result.prevPage
+      listasPrecios,
+      totalDocs: total,
+      totalPages: Math.ceil(total / limit),
+      currentPage: parseInt(page),
+      hasNextPage: parseInt(page) < Math.ceil(total / limit),
+      hasPrevPage: parseInt(page) > 1
     });
   } catch (error) {
     console.error('Error al obtener listas de precios:', error);
@@ -87,11 +80,6 @@ router.get('/producto/:productoId', async (req, res) => {
     
     if (!listaPrecio) {
       return res.status(404).json({ message: 'No existe lista de precios para este producto' });
-    }
-    
-    // Calcular los márgenes de ganancia si tiene producto con costo
-    if (listaPrecio.producto && listaPrecio.producto.costoFinal) {
-      await listaPrecio.calcularMargenes(listaPrecio.producto.costoFinal);
     }
     
     res.status(200).json(listaPrecio);
@@ -133,11 +121,6 @@ router.post('/', async (req, res) => {
       listaPrecio.codigoProducto = productoData.codigo;
       listaPrecio.fechaActualizacion = new Date();
       
-      // Calcular márgenes de ganancia
-      if (productoData.costoFinal) {
-        await listaPrecio.calcularMargenes(productoData.costoFinal);
-      }
-      
       await listaPrecio.save();
       res.status(200).json(listaPrecio);
     } else {
@@ -152,11 +135,6 @@ router.post('/', async (req, res) => {
         precioMayorista: precioMayorista || 0,
         descripcion: descripcion || ''
       });
-      
-      // Calcular márgenes de ganancia
-      if (productoData.costoFinal) {
-        await nuevaListaPrecio.calcularMargenes(productoData.costoFinal);
-      }
       
       await nuevaListaPrecio.save();
       res.status(201).json(nuevaListaPrecio);
@@ -211,17 +189,6 @@ router.post('/ajuste-masivo', async (req, res) => {
       { activo: true }, 
       { $set: { fechaActualizacion: new Date() }, ...updateObj }
     );
-    
-    // También actualizar márgenes después del ajuste (esto se haría mejor en un método post)
-    const listasActualizadas = await ListaPrecio.find({ activo: true })
-      .populate('producto', 'costoFinal');
-      
-    for (const lista of listasActualizadas) {
-      if (lista.producto && lista.producto.costoFinal) {
-        await lista.calcularMargenes(lista.producto.costoFinal);
-        await lista.save();
-      }
-    }
     
     res.status(200).json({ 
       message: `Se actualizaron ${resultado.modifiedCount} listas de precios con un ${porcentaje > 0 ? 'aumento' : 'descuento'} del ${Math.abs(porcentaje)}%`,
