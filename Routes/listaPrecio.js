@@ -85,6 +85,8 @@ router.post('/', asyncHandler(async (req, res) => {
   // Crear nueva lista con valores seguros
   const nuevaLista = new ListaPrecio({
     nombreProducto,
+    // Generar un valor único para el campo producto
+    producto: nombreProducto + '_' + Date.now(),
     precio1: Number(precio1) || 0,
     precio2: Number(precio2) || 0,
     precio3: Number(precio3) || 0
