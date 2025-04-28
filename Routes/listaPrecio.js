@@ -19,22 +19,36 @@ router.get('/', asyncHandler(async (req, res) => {
   const { 
     page = 1, 
     limit = 10, 
-    busqueda = '' 
+    busqueda = '',
+    mes, // Nuevo parámetro para filtrar por mes (1-12)
+    anio = new Date().getFullYear(), // Por defecto el año actual
+    ordenar = 'nombreProducto', // Campo por el que ordenar
+    direccion = 'asc' // Dirección del ordenamiento (asc o desc)
   } = req.query;
   
-  // Crear filtro basado en búsqueda
+  // Crear filtro basado en búsqueda y filtros de fecha
   let filtro = {};
+  
+  // Filtro por texto de búsqueda
   if (busqueda) {
-    filtro = {
-      nombreProducto: { $regex: busqueda, $options: 'i' }
-    };
+    filtro.nombreProducto = { $regex: busqueda, $options: 'i' };
   }
   
-  // Opciones de paginación
+  // Filtro por mes y año si se especifica
+  if (mes) {
+    filtro.mes = parseInt(mes);
+    filtro.anio = parseInt(anio);
+  }
+  
+  console.log('Filtros aplicados:', filtro);
+  
+  // Opciones de paginación y ordenamiento
   const opciones = {
     page: parseInt(page),
     limit: parseInt(limit),
-    sort: { nombreProducto: 1 }
+    sort: { 
+      [ordenar]: direccion === 'desc' ? -1 : 1 
+    }
   };
   
   // Obtener listas de precios paginadas
@@ -51,6 +65,42 @@ router.get('/', asyncHandler(async (req, res) => {
     prevPage: resultado.prevPage,
     nextPage: resultado.nextPage
   });
+}));
+
+// Nueva ruta para obtener estadísticas por mes
+router.get('/estadisticas-mensual', asyncHandler(async (req, res) => {
+  const { anio = new Date().getFullYear() } = req.query;
+  
+  // Agregación para obtener conteo por mes
+  const estadisticas = await ListaPrecio.aggregate([
+    {
+      $match: { anio: parseInt(anio) }
+    },
+    {
+      $group: {
+        _id: "$mes",
+        cantidad: { $sum: 1 },
+        precioPromedio1: { $avg: "$precio1" },
+        precioPromedio2: { $avg: "$precio2" },
+        precioPromedio3: { $avg: "$precio3" },
+      }
+    },
+    {
+      $sort: { _id: 1 }
+    },
+    {
+      $project: {
+        mes: "$_id",
+        cantidad: 1,
+        precioPromedio1: { $round: ["$precioPromedio1", 2] },
+        precioPromedio2: { $round: ["$precioPromedio2", 2] },
+        precioPromedio3: { $round: ["$precioPromedio3", 2] },
+        _id: 0
+      }
+    }
+  ]);
+  
+  res.status(200).json(estadisticas);
 }));
 
 // Obtener una lista de precios por ID
@@ -72,7 +122,8 @@ router.post('/', asyncHandler(async (req, res) => {
     nombreProducto,
     precio1,
     precio2,
-    precio3
+    precio3,
+    fecha // Opcionalmente permitir especificar una fecha
   } = req.body;
   
   // Validar campo requerido
@@ -82,6 +133,16 @@ router.post('/', asyncHandler(async (req, res) => {
     });
   }
   
+  // Procesar la fecha si se especifica
+  let fechaCreacion = new Date();
+  if (fecha) {
+    try {
+      fechaCreacion = new Date(fecha);
+    } catch (error) {
+      console.warn('Fecha inválida, usando fecha actual:', error);
+    }
+  }
+  
   // Crear nueva lista con valores seguros
   const nuevaLista = new ListaPrecio({
     nombreProducto,
@@ -89,7 +150,8 @@ router.post('/', asyncHandler(async (req, res) => {
     producto: nombreProducto + '_' + Date.now(),
     precio1: Number(precio1) || 0,
     precio2: Number(precio2) || 0,
-    precio3: Number(precio3) || 0
+    precio3: Number(precio3) || 0,
+    fechaCreacion
   });
   
   await nuevaLista.save();

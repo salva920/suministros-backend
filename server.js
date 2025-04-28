@@ -51,6 +51,9 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+app.use('/api', require('./Routes/auth'));
+
+
 app.use('/api/dashboard', require('./Routes/Dashboard'));
 
 app.use('/api/productos', require('./Routes/Productos'));
