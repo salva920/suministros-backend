@@ -45,7 +45,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Actualizar contraseña (versión simplificada)
-router.put('/update-password', async (req, res) => {
+router.post('/update-password', async (req, res) => {
   try {
     const { username, currentPassword, newPassword } = req.body;
     
