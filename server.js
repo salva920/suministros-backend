@@ -30,7 +30,7 @@ mongoose.connect(process.env.MONGO_URI)
 .catch(err => console.error('❌ Error MongoDB:', err.message));
 
 
-// Ruta de login
+/* Ruta de login
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -49,7 +49,7 @@ app.post('/api/login', async (req, res) => {
     console.error('Error en login:', error);
     res.status(500).json({ error: 'Error en el servidor' });
   }
-});
+});*/
 
 app.use('/api/auth', require('./Routes/auth'));
 
