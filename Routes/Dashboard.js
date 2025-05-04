@@ -63,38 +63,58 @@ const reiniciarConteosMensuales = async (mesAnterior) => {
 
 router.get('/', async (req, res) => {
   try {
-    const fecha = new Date();
-    // Primer y último día del mes actual
-    const primerDiaMesActual = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
-    const primerDiaMesSiguiente = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 1);
-    // Primer y último día del mes anterior
-    const primerDiaMesAnterior = new Date(fecha.getFullYear(), fecha.getMonth() - 1, 1);
-    const primerDiaMesActualCopia = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
+    // 1. Buscar la venta más reciente
+    const ventaMasReciente = await Venta.findOne().sort({ fecha: -1 }).lean();
 
-    // Ventas del mes actual
+    if (!ventaMasReciente) {
+      // Si no hay ventas, responde con ceros
+      return res.json({
+        success: true,
+        data: {
+          ventasTotales: 0,
+          ventasMesActual: 0,
+          ventasMesAnterior: 0,
+          porcentajeCrecimiento: 0,
+          productosBajoStock: [],
+          totalClientes: 0
+        }
+      });
+    }
+
+    // 2. Tomar el mes y año de la venta más reciente
+    const fechaReferencia = new Date(ventaMasReciente.fecha);
+    const anioActual = fechaReferencia.getFullYear();
+    const mesActual = fechaReferencia.getMonth(); // 0 = enero
+
+    // 3. Calcular rangos de fechas
+    const primerDiaMesActual = new Date(anioActual, mesActual, 1);
+    const primerDiaMesSiguiente = new Date(anioActual, mesActual + 1, 1);
+    const primerDiaMesAnterior = new Date(anioActual, mesActual - 1, 1);
+
+    // 4. Ventas del mes actual (según la venta más reciente)
     const ventasMesActualData = await Venta.aggregate([
       { $match: { fecha: { $gte: primerDiaMesActual, $lt: primerDiaMesSiguiente } } },
       { $group: { _id: null, total: { $sum: "$total" } } }
     ]);
 
-    // Ventas del mes anterior
+    // 5. Ventas del mes anterior
     const ventasMesAnteriorData = await Venta.aggregate([
-      { $match: { fecha: { $gte: primerDiaMesAnterior, $lt: primerDiaMesActualCopia } } },
+      { $match: { fecha: { $gte: primerDiaMesAnterior, $lt: primerDiaMesActual } } },
       { $group: { _id: null, total: { $sum: "$total" } } }
     ]);
 
-    // Ventas totales (histórico)
+    // 6. Ventas totales (histórico)
     const ventasTotalesData = await Venta.aggregate([
       { $group: { _id: null, total: { $sum: "$total" } } }
     ]);
 
-    // Productos con bajo stock (actual)
+    // 7. Productos con bajo stock (actual)
     const productosBajoStock = await Producto.find({ stock: { $lt: 5 } }).lean();
 
-    // Total de clientes (histórico)
+    // 8. Total de clientes (histórico)
     const totalClientes = await Cliente.estimatedDocumentCount();
 
-    // Calcular porcentaje de crecimiento
+    // 9. Calcular porcentaje de crecimiento
     const ventasMesActual = ventasMesActualData[0]?.total || 0;
     const ventasMesAnterior = ventasMesAnteriorData[0]?.total || 0;
     let porcentajeCrecimiento = 0;
@@ -110,7 +130,8 @@ router.get('/', async (req, res) => {
         ventasMesAnterior,
         porcentajeCrecimiento,
         productosBajoStock,
-        totalClientes
+        totalClientes,
+        mesReferencia: `${anioActual}-${(mesActual + 1).toString().padStart(2, '0')}` // Opcional: para mostrar en el frontend
       }
     });
   } catch (error) {
