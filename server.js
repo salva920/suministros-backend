@@ -52,7 +52,8 @@ app.post('/api/login', async (req, res) => {
 });*/
 
 app.use('/api/auth', require('./Routes/auth'));
-
+ 
+app.use('/api/unlock-key', require('./Routes/unlockKey'));
 
 app.use('/api/dashboard', require('./Routes/Dashboard'));
 
