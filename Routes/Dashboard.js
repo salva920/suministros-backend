@@ -5,6 +5,7 @@ const Venta = require('../models/Venta');
 const Producto = require('../models/Producto');
 const Cliente = require('../models/Cliente');
 const EstadisticasMensuales = require('../models/EstadisticasMensuales');
+const FacturaPendiente = require('../models/FacturaPendiente');
 
 const obtenerMesActual = () => {
   const fecha = new Date();
@@ -122,6 +123,8 @@ router.get('/', async (req, res) => {
       porcentajeCrecimiento = ((ventasMesActual - ventasMesAnterior) / ventasMesAnterior) * 100;
     }
 
+    const totalFacturasPendientes = await FacturaPendiente.countDocuments({ saldo: { $gt: 0 } });
+
     res.json({
       success: true,
       data: {
@@ -131,7 +134,8 @@ router.get('/', async (req, res) => {
         porcentajeCrecimiento,
         productosBajoStock,
         totalClientes,
-        mesReferencia: `${anioActual}-${(mesActual + 1).toString().padStart(2, '0')}` // Opcional: para mostrar en el frontend
+        mesReferencia: `${anioActual}-${(mesActual + 1).toString().padStart(2, '0')}`,
+        totalFacturasPendientes
       }
     });
   } catch (error) {
