@@ -63,47 +63,58 @@ const reiniciarConteosMensuales = async (mesAnterior) => {
 
 router.get('/', async (req, res) => {
   try {
-    // Consultas optimizadas con Promise.all
-    const [ventasData, productosData, clientesData] = await Promise.all([
-      Venta.aggregate([
-        { 
-          $group: { 
-            _id: null, 
-            total: { $sum: "$total" },
-            count: { $sum: 1 }
-          }
-        }
-      ]),
-      Producto.find({ stock: { $lt: 5 } }).lean(),
-      Cliente.estimatedDocumentCount()
+    const fecha = new Date();
+    // Primer y último día del mes actual
+    const primerDiaMesActual = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
+    const primerDiaMesSiguiente = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 1);
+    // Primer y último día del mes anterior
+    const primerDiaMesAnterior = new Date(fecha.getFullYear(), fecha.getMonth() - 1, 1);
+    const primerDiaMesActualCopia = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
+
+    // Ventas del mes actual
+    const ventasMesActualData = await Venta.aggregate([
+      { $match: { fecha: { $gte: primerDiaMesActual, $lt: primerDiaMesSiguiente } } },
+      { $group: { _id: null, total: { $sum: "$total" } } }
     ]);
 
-    // Estructura de respuesta estandarizada
-    const response = {
-      success: true,
-      data: {
-        ventasTotales: ventasData[0]?.total || 0,
-        productosBajoStock: productosData,
-        totalClientes: clientesData
-      }
-    };
+    // Ventas del mes anterior
+    const ventasMesAnteriorData = await Venta.aggregate([
+      { $match: { fecha: { $gte: primerDiaMesAnterior, $lt: primerDiaMesActualCopia } } },
+      { $group: { _id: null, total: { $sum: "$total" } } }
+    ]);
 
-    // Validación final de estructura
-    if (typeof response.data.ventasTotales !== 'number' || 
-        !Array.isArray(response.data.productosBajoStock)) {
-      throw new Error('Estructura de datos inválida');
+    // Ventas totales (histórico)
+    const ventasTotalesData = await Venta.aggregate([
+      { $group: { _id: null, total: { $sum: "$total" } } }
+    ]);
+
+    // Productos con bajo stock (actual)
+    const productosBajoStock = await Producto.find({ stock: { $lt: 5 } }).lean();
+
+    // Total de clientes (histórico)
+    const totalClientes = await Cliente.estimatedDocumentCount();
+
+    // Calcular porcentaje de crecimiento
+    const ventasMesActual = ventasMesActualData[0]?.total || 0;
+    const ventasMesAnterior = ventasMesAnteriorData[0]?.total || 0;
+    let porcentajeCrecimiento = 0;
+    if (ventasMesAnterior > 0) {
+      porcentajeCrecimiento = ((ventasMesActual - ventasMesAnterior) / ventasMesAnterior) * 100;
     }
 
-    // Respuesta con estructura consistente
-    res.json(response);
-
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error en dashboard:`, error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      errorCode: 'DASHBOARD_FETCH_ERROR'
+    res.json({
+      success: true,
+      data: {
+        ventasTotales: ventasTotalesData[0]?.total || 0,
+        ventasMesActual,
+        ventasMesAnterior,
+        porcentajeCrecimiento,
+        productosBajoStock,
+        totalClientes
+      }
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
