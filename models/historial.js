@@ -30,7 +30,12 @@ const historialSchema = new mongoose.Schema({
   fecha: {
     type: Date,
     default: Date.now
-  }
+  },
+  costoFinal: {
+    type: Number,
+    required: false, // Solo requerido para entradas
+    min: 0
+  },
 });
 
 // Validación pre-save
