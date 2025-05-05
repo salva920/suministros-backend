@@ -336,6 +336,7 @@ router.post('/:id/entradas', async (req, res) => {
       stockNuevo: producto.stock,
       fecha: fechaHora,
       costoFinal: costoFinalEntrada,
+      stockLote: cantidad,
       detalles: req.body.detalles || 'Entrada de stock'
     });
     
