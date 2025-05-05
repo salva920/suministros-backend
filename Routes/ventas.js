@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const Venta = require('../models/Venta');
 const Producto = require('../models/Producto');
 const moment = require('moment'); // Asegúrate de que esta línea esté presente
+const Historial = require('../models/historial');
 
 // Crear una nueva venta (POST /api/ventas)
 router.post('/', async (req, res) => {
@@ -51,6 +52,28 @@ router.post('/', async (req, res) => {
         throw new Error(`Stock insuficiente para el producto: ${producto.nombre}`);
       }
 
+      // Lógica FIFO para descontar de los lotes
+      let cantidadRestante = item.cantidad;
+      const lotes = await Historial.find({
+        producto: producto._id,
+        operacion: { $in: ['creacion', 'entrada'] },
+        stockLote: { $gt: 0 }
+      }).sort({ fecha: 1 }).session(session);
+
+      for (const lote of lotes) {
+        if (cantidadRestante <= 0) break;
+        const cantidadDeEsteLote = Math.min(lote.stockLote, cantidadRestante);
+
+        // Aquí puedes calcular la ganancia real usando lote.costoFinal si lo necesitas
+
+        // Descuenta del lote
+        lote.stockLote -= cantidadDeEsteLote;
+        await lote.save({ session });
+
+        cantidadRestante -= cantidadDeEsteLote;
+      }
+
+      // Descuenta del stock total del producto (esto ya lo tienes)
       producto.stock -= item.cantidad;
       await producto.save({ session });
     }
