@@ -332,5 +332,14 @@ router.post('/:id/entradas', async (req, res) => {
   }
 });
 
+// GET /api/productos/:id/lotes
+router.get('/productos/:id/lotes', async (req, res) => {
+  const lotes = await Historial.find({
+    producto: req.params.id,
+    operacion: 'entrada',
+    stockLote: { $gt: 0 }
+  }).sort({ fecha: 1 }); // FIFO
+  res.json(lotes);
+});
 
 module.exports = router;

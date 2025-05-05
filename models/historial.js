@@ -36,6 +36,11 @@ const historialSchema = new mongoose.Schema({
     required: false, // Solo requerido para entradas
     min: 0
   },
+  stockLote: {
+    type: Number,
+    required: true,
+    min: 0
+  },
 });
 
 // Validación pre-save
