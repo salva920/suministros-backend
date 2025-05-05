@@ -302,21 +302,11 @@ router.post('/:id/entradas', async (req, res) => {
     producto.stock += cantidad;
     producto.cantidad += cantidad; // Actualizar también la cantidad total
     
-    // Si el costo es diferente, recalcular el costo final
-    if (req.body.costoUnitario && req.body.costoUnitario > 0) {
-      // Calcular nuevo costo promedio ponderado
-      const costoActualTotal = producto.costoInicial * cantidadAnterior;
-      const costoNuevoTotal = req.body.costoUnitario * cantidad;
-      const costoTotalCombinado = costoActualTotal + costoNuevoTotal;
-      
-      // Actualizar el costo inicial promedio
-      producto.costoInicial = costoTotalCombinado / producto.cantidad;
-      
-      // Recalcular costo final
-      producto.costoFinal = (producto.costoInicial * producto.cantidad + 
-                            producto.acarreo + producto.flete) / 
-                            producto.cantidad;
-    }
+    // Calcular el costo final de la entrada
+    const costoInicial = req.body.costoUnitario || producto.costoInicial;
+    const acarreo = req.body.acarreo || 0;
+    const flete = req.body.flete || 0;
+    const costoFinalEntrada = ((costoInicial * cantidad) + acarreo + flete) / cantidad;
     
     // Guardar los cambios
     await producto.save();
@@ -330,7 +320,8 @@ router.post('/:id/entradas', async (req, res) => {
       cantidad: cantidad,
       stockAnterior: stockAnterior,
       stockNuevo: producto.stock,
-      fecha: fechaHora, // Usar la fecha recibida del frontend
+      fecha: fechaHora,
+      costoFinal: costoFinalEntrada,
       detalles: req.body.detalles || 'Entrada de stock'
     });
     
