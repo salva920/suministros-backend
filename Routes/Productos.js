@@ -79,8 +79,18 @@ router.post('/', async (req, res) => {
 
     await nuevoProducto.save();
     
-    // Registrar creación
-    await registrarEnHistorial(nuevoProducto, 'creacion', nuevoProducto.cantidad);
+    // Registrar creación en el historial
+    await Historial.create({
+      producto: nuevoProducto._id,
+      nombreProducto: nuevoProducto.nombre,
+      codigoProducto: nuevoProducto.codigo,
+      operacion: 'creacion',
+      cantidad: nuevoProducto.cantidad,
+      stockAnterior: 0,
+      stockNuevo: nuevoProducto.stock,
+      fecha: new Date(),
+      stockLote: nuevoProducto.cantidad
+    });
     
     res.status(201).json(nuevoProducto.toObject());
   } catch (error) {
@@ -225,7 +235,7 @@ router.put('/:id', async (req, res) => {
     // Registrar cambio en el historial si el stock cambió
     if (productoActualizado.stock !== stockOriginal) {
       const diferencia = productoActualizado.stock - stockOriginal;
-      await Historial.create({
+      const historialData = {
         producto: productoActualizado._id,
         nombreProducto: productoActualizado.nombre,
         codigoProducto: productoActualizado.codigo,
@@ -235,7 +245,11 @@ router.put('/:id', async (req, res) => {
         stockNuevo: productoActualizado.stock,
         fecha: new Date(),
         detalles: 'Ajuste mediante edición de producto'
-      });
+      };
+      if (diferencia > 0) {
+        historialData.stockLote = diferencia;
+      }
+      await Historial.create(historialData);
       console.log(`Historial creado: ${diferencia > 0 ? 'entrada' : 'salida'} de ${Math.abs(diferencia)} unidades`);
     }
 
