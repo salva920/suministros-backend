@@ -347,8 +347,8 @@ router.post('/:id/entradas', async (req, res) => {
   }
 });
 
-// GET /api/productos/:id/lotes
-router.get('/productos/:id/lotes', async (req, res) => {
+// GET /:id/lotes
+router.get('/:id/lotes', async (req, res) => {
   const lotes = await Historial.find({
     producto: req.params.id,
     operacion: { $in: ['creacion', 'entrada'] },
