@@ -89,7 +89,8 @@ router.post('/', async (req, res) => {
       stockAnterior: 0,
       stockNuevo: nuevoProducto.stock,
       fecha: new Date(),
-      stockLote: nuevoProducto.cantidad
+      stockLote: nuevoProducto.cantidad,
+      costoFinal: nuevoProducto.costoFinal
     });
     
     res.status(201).json(nuevoProducto.toObject());
@@ -335,9 +336,8 @@ router.post('/:id/entradas', async (req, res) => {
       stockAnterior: stockAnterior,
       stockNuevo: producto.stock,
       fecha: fechaHora,
-      costoFinal: costoFinalEntrada,
       stockLote: cantidad,
-      detalles: req.body.detalles || 'Entrada de stock'
+      costoFinal: costoFinalEntrada
     });
     
     res.json(producto);
