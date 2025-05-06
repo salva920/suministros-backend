@@ -88,7 +88,7 @@ router.post('/', async (req, res) => {
       cantidad: nuevoProducto.cantidad,
       stockAnterior: 0,
       stockNuevo: nuevoProducto.stock,
-      fecha: new Date(),
+      fecha: nuevoProducto.fechaIngreso,
       stockLote: nuevoProducto.cantidad,
       costoFinal: nuevoProducto.costoFinal
     });
