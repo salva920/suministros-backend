@@ -351,7 +351,7 @@ router.post('/:id/entradas', async (req, res) => {
 router.get('/productos/:id/lotes', async (req, res) => {
   const lotes = await Historial.find({
     producto: req.params.id,
-    operacion: 'entrada',
+    operacion: { $in: ['creacion', 'entrada'] },
     stockLote: { $gt: 0 }
   }).sort({ fecha: 1 }); // FIFO
   res.json(lotes);
