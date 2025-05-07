@@ -72,6 +72,87 @@ router.post('/transacciones', async (req, res) => {
   }
 });
 
+// Ruta para eliminar una transacción
+router.delete('/transacciones/:id', async (req, res) => {
+  try {
+    const caja = await Caja.findOne();
+    const transaccion = caja.transacciones.id(req.params.id);
+    
+    if (!transaccion) {
+      return res.status(404).json({ message: 'Transacción no encontrada' });
+    }
+
+    // Recalcular saldos
+    const moneda = transaccion.moneda;
+    const saldoActual = caja.saldos[moneda];
+    const nuevoSaldo = saldoActual - transaccion.entrada + transaccion.salida;
+
+    // Eliminar la transacción y actualizar saldos
+    await Caja.findOneAndUpdate(
+      { _id: caja._id },
+      { 
+        $pull: { transacciones: { _id: req.params.id } },
+        $set: { [`saldos.${moneda}`]: nuevoSaldo }
+      },
+      { new: true }
+    );
+
+    const updated = await Caja.findOne();
+    res.json({ transacciones: updated.transacciones, saldos: updated.saldos });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al eliminar la transacción', error: error.message });
+  }
+});
+
+// Ruta para actualizar una transacción
+router.put('/transacciones/:id', async (req, res) => {
+  try {
+    const { fecha, concepto, moneda, entrada, salida, tasaCambio } = req.body;
+    
+    const validacion = validarCampos(req.body);
+    if (validacion.error) return res.status(400).json(validacion);
+
+    const caja = await Caja.findOne();
+    const transaccion = caja.transacciones.id(req.params.id);
+    
+    if (!transaccion) {
+      return res.status(404).json({ message: 'Transacción no encontrada' });
+    }
+
+    // Actualizar la transacción
+    const updated = await Caja.findOneAndUpdate(
+      { _id: caja._id, 'transacciones._id': req.params.id },
+      { 
+        $set: {
+          'transacciones.$.fecha': moment.tz(fecha, 'America/Caracas').toDate(),
+          'transacciones.$.concepto': concepto,
+          'transacciones.$.moneda': moneda,
+          'transacciones.$.entrada': entrada,
+          'transacciones.$.salida': salida,
+          'transacciones.$.tasaCambio': tasaCambio
+        }
+      },
+      { new: true }
+    );
+
+    // Recalcular saldos
+    const saldos = { USD: 0, Bs: 0 };
+    updated.transacciones.forEach(t => {
+      saldos[t.moneda] += t.entrada - t.salida;
+    });
+
+    await Caja.findOneAndUpdate(
+      { _id: caja._id },
+      { $set: { saldos } }
+    );
+
+    const final = await Caja.findOne();
+    res.json({ transacciones: final.transacciones, saldos: final.saldos });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al actualizar la transacción', error: error.message });
+  }
+});
+
 // Funciones auxiliares
 const validarCampos = ({ tasaCambio, fecha, concepto, moneda }) => {
   const errors = {};
