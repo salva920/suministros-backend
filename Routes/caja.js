@@ -119,7 +119,7 @@ router.put('/transacciones/:id', async (req, res) => {
       return res.status(404).json({ message: 'Transacción no encontrada' });
     }
 
-    // Actualizar la transacción
+    // Actualizar la transacción existente manteniendo su ID
     const updated = await Caja.findOneAndUpdate(
       { _id: caja._id, 'transacciones._id': req.params.id },
       { 
@@ -127,9 +127,9 @@ router.put('/transacciones/:id', async (req, res) => {
           'transacciones.$.fecha': moment.tz(fecha, 'America/Caracas').toDate(),
           'transacciones.$.concepto': concepto,
           'transacciones.$.moneda': moneda,
-          'transacciones.$.entrada': entrada,
-          'transacciones.$.salida': salida,
-          'transacciones.$.tasaCambio': tasaCambio
+          'transacciones.$.entrada': parseFloat(entrada) || 0,
+          'transacciones.$.salida': parseFloat(salida) || 0,
+          'transacciones.$.tasaCambio': parseFloat(tasaCambio)
         }
       },
       { new: true }
@@ -141,13 +141,24 @@ router.put('/transacciones/:id', async (req, res) => {
       saldos[t.moneda] += t.entrada - t.salida;
     });
 
-    await Caja.findOneAndUpdate(
+    // Actualizar saldos y ordenar transacciones
+    const final = await Caja.findOneAndUpdate(
       { _id: caja._id },
-      { $set: { saldos } }
+      { 
+        $set: { 
+          saldos,
+          transacciones: updated.transacciones.sort((a, b) => 
+            new Date(b.fecha) - new Date(a.fecha)
+          )
+        }
+      },
+      { new: true }
     );
 
-    const final = await Caja.findOne();
-    res.json({ transacciones: final.transacciones, saldos: final.saldos });
+    res.json({ 
+      transacciones: final.transacciones, 
+      saldos: final.saldos 
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error al actualizar la transacción', error: error.message });
   }
