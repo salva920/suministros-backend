@@ -9,9 +9,14 @@ router.get('/', async (req, res) => {
     // Buscar la caja existente o crear una nueva si no existe
     const caja = await Caja.findOne() || await Caja.create({ transacciones: [], saldos: { USD: 0, Bs: 0 }});
     
+    // Ordenar las transacciones por fecha descendente
+    const transaccionesOrdenadas = caja.transacciones.sort((a, b) => 
+      new Date(b.fecha) - new Date(a.fecha)
+    );
+    
     // Asegurar que la respuesta tenga la estructura correcta
     res.json({
-      transacciones: caja.transacciones,
+      transacciones: transaccionesOrdenadas,
       saldos: caja.saldos,
       _id: caja._id,
       __v: caja.__v
@@ -57,16 +62,25 @@ router.post('/transacciones', async (req, res) => {
     const caja = await Caja.findOne();
     const nuevaTransaccion = crearTransaccion(fecha, concepto, moneda, entrada, salida, tasaCambio, caja);
 
+    // Agregar la nueva transacción y ordenar todas las transacciones
     const updated = await Caja.findOneAndUpdate(
       { _id: caja._id },
       { 
         $push: { transacciones: nuevaTransaccion },
-        $set: { [`saldos.${moneda}`]: nuevaTransaccion.saldo }
+        $set: { 
+          [`saldos.${moneda}`]: nuevaTransaccion.saldo,
+          transacciones: [...caja.transacciones, nuevaTransaccion].sort((a, b) => 
+            new Date(b.fecha) - new Date(a.fecha)
+          )
+        }
       },
       { new: true }
     );
 
-    res.json({ transacciones: updated.transacciones, saldos: updated.saldos });
+    res.json({ 
+      transacciones: updated.transacciones, 
+      saldos: updated.saldos 
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error al agregar transacción', error: error.message });
   }
@@ -88,17 +102,24 @@ router.delete('/transacciones/:id', async (req, res) => {
     const nuevoSaldo = saldoActual - transaccion.entrada + transaccion.salida;
 
     // Eliminar la transacción y actualizar saldos
-    await Caja.findOneAndUpdate(
+    const updated = await Caja.findOneAndUpdate(
       { _id: caja._id },
       { 
         $pull: { transacciones: { _id: req.params.id } },
-        $set: { [`saldos.${moneda}`]: nuevoSaldo }
+        $set: { 
+          [`saldos.${moneda}`]: nuevoSaldo,
+          transacciones: caja.transacciones
+            .filter(t => t._id.toString() !== req.params.id)
+            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+        }
       },
       { new: true }
     );
 
-    const updated = await Caja.findOne();
-    res.json({ transacciones: updated.transacciones, saldos: updated.saldos });
+    res.json({ 
+      transacciones: updated.transacciones, 
+      saldos: updated.saldos 
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error al eliminar la transacción', error: error.message });
   }
