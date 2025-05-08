@@ -119,12 +119,15 @@ router.put('/transacciones/:id', async (req, res) => {
       return res.status(404).json({ message: 'Transacción no encontrada' });
     }
 
-    // Actualizar la transacción existente manteniendo su ID
+    // Asegurarnos de que la fecha se maneje correctamente
+    const fechaFormateada = moment.tz(fecha, 'America/Caracas').startOf('day').toDate();
+
+    // Actualizar la transacción existente
     const updated = await Caja.findOneAndUpdate(
       { _id: caja._id, 'transacciones._id': req.params.id },
       { 
         $set: {
-          'transacciones.$.fecha': moment.tz(fecha, 'America/Caracas').toDate(),
+          'transacciones.$.fecha': fechaFormateada,
           'transacciones.$.concepto': concepto,
           'transacciones.$.moneda': moneda,
           'transacciones.$.entrada': parseFloat(entrada) || 0,
