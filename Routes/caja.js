@@ -120,8 +120,8 @@ router.put('/transacciones/:id', async (req, res) => {
     }
 
     // Asegurarnos de que la fecha se maneje correctamente
-    const fechaObj = new Date(fecha);
-    fechaObj.setHours(12, 0, 0, 0); // Establecer la hora al mediodía
+    const fechaObj = fecha ? new Date(fecha) : new Date(transaccion.fecha);
+    fechaObj.setHours(12, 0, 0, 0);
 
     // Actualizar la transacción existente
     const updated = await Caja.findOneAndUpdate(
@@ -151,9 +151,7 @@ router.put('/transacciones/:id', async (req, res) => {
       { 
         $set: { 
           saldos,
-          transacciones: updated.transacciones.sort((a, b) => 
-            new Date(b.fecha) - new Date(a.fecha)
-          )
+          transacciones: updated.transacciones
         }
       },
       { new: true }
