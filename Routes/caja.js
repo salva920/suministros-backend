@@ -6,10 +6,7 @@ const moment = require('moment-timezone');
 // Ruta para obtener la caja
 router.get('/', async (req, res) => {
   try {
-    // Buscar la caja existente o crear una nueva si no existe
     const caja = await Caja.findOne() || await Caja.create({ transacciones: [], saldos: { USD: 0, Bs: 0 }});
-    
-    // Asegurar que la respuesta tenga la estructura correcta
     res.json({
       transacciones: caja.transacciones,
       saldos: caja.saldos,
@@ -45,23 +42,29 @@ router.get('/transacciones', async (req, res) => {
   }
 });
 
-// Registrar nueva transacción con corrección de zona horaria
+// Registrar nueva transacción
 router.post('/transacciones', async (req, res) => {
   try {
     const { fecha, concepto, moneda, entrada, salida, tasaCambio } = req.body;
     
-    // Validación de campos
     const validacion = validarCampos(req.body);
     if (validacion.error) return res.status(400).json(validacion);
 
     const caja = await Caja.findOne();
     const nuevaTransaccion = crearTransaccion(fecha, concepto, moneda, entrada, salida, tasaCambio, caja);
 
+    // Agregar transacción y reordenar
+    let transaccionesActualizadas = [...caja.transacciones, nuevaTransaccion];
+    transaccionesActualizadas = transaccionesActualizadas.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    
+    // Recalcular saldos secuencialmente
+    const { saldos } = recalcularSaldos(transaccionesActualizadas);
+
     const updated = await Caja.findOneAndUpdate(
       { _id: caja._id },
       { 
-        $push: { transacciones: nuevaTransaccion },
-        $set: { [`saldos.${moneda}`]: nuevaTransaccion.saldo }
+        transacciones: transaccionesActualizadas,
+        saldos
       },
       { new: true }
     );
@@ -72,87 +75,64 @@ router.post('/transacciones', async (req, res) => {
   }
 });
 
-// Ruta para eliminar una transacción
+// Eliminar transacción
 router.delete('/transacciones/:id', async (req, res) => {
   try {
     const caja = await Caja.findOne();
     const transaccion = caja.transacciones.id(req.params.id);
     
-    if (!transaccion) {
-      return res.status(404).json({ message: 'Transacción no encontrada' });
-    }
+    if (!transaccion) return res.status(404).json({ message: 'Transacción no encontrada' });
 
+    // Eliminar y reordenar
+    let transaccionesActualizadas = caja.transacciones.filter(t => t._id.toString() !== req.params.id);
+    transaccionesActualizadas = transaccionesActualizadas.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    
     // Recalcular saldos
-    const moneda = transaccion.moneda;
-    const saldoActual = caja.saldos[moneda];
-    const nuevoSaldo = saldoActual - transaccion.entrada + transaccion.salida;
+    const { saldos } = recalcularSaldos(transaccionesActualizadas);
 
-    // Eliminar la transacción y actualizar saldos
-    await Caja.findOneAndUpdate(
+    const updated = await Caja.findOneAndUpdate(
       { _id: caja._id },
       { 
-        $pull: { transacciones: { _id: req.params.id } },
-        $set: { [`saldos.${moneda}`]: nuevoSaldo }
+        transacciones: transaccionesActualizadas,
+        saldos
       },
       { new: true }
     );
 
-    const updated = await Caja.findOne();
     res.json({ transacciones: updated.transacciones, saldos: updated.saldos });
   } catch (error) {
     res.status(500).json({ message: 'Error al eliminar la transacción', error: error.message });
   }
 });
 
-// Ruta para actualizar una transacción
+// Actualizar transacción
 router.put('/transacciones/:id', async (req, res) => {
   try {
     const { fecha, concepto, moneda, entrada, salida, tasaCambio } = req.body;
-    
     const validacion = validarCampos(req.body);
     if (validacion.error) return res.status(400).json(validacion);
 
     const caja = await Caja.findOne();
-    const transaccion = caja.transacciones.id(req.params.id);
+    const index = caja.transacciones.findIndex(t => t._id.toString() === req.params.id);
     
-    if (!transaccion) {
-      return res.status(404).json({ message: 'Transacción no encontrada' });
-    }
+    if (index === -1) return res.status(404).json({ message: 'Transacción no encontrada' });
 
-    // Asegurarnos de que la fecha se maneje correctamente
-    const fechaObj = fecha ? new Date(fecha) : new Date(transaccion.fecha);
-    fechaObj.setHours(12, 0, 0, 0);
+    // Actualizar transacción
+    const updatedTransaccion = crearTransaccion(fecha, concepto, moneda, entrada, salida, tasaCambio, caja);
+    let transaccionesActualizadas = [...caja.transacciones];
+    transaccionesActualizadas[index] = updatedTransaccion;
+    
+    // Reordenar por fecha
+    transaccionesActualizadas = transaccionesActualizadas.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    
+    // Recalcular saldos secuencialmente
+    const { saldos } = recalcularSaldos(transaccionesActualizadas);
 
-    // Actualizar la transacción existente
-    const updated = await Caja.findOneAndUpdate(
-      { _id: caja._id, 'transacciones._id': req.params.id },
-      { 
-        $set: {
-          'transacciones.$.fecha': fechaObj,
-          'transacciones.$.concepto': concepto,
-          'transacciones.$.moneda': moneda,
-          'transacciones.$.entrada': parseFloat(entrada) || 0,
-          'transacciones.$.salida': parseFloat(salida) || 0,
-          'transacciones.$.tasaCambio': parseFloat(tasaCambio)
-        }
-      },
-      { new: true }
-    );
-
-    // Recalcular saldos
-    const saldos = { USD: 0, Bs: 0 };
-    updated.transacciones.forEach(t => {
-      saldos[t.moneda] += t.entrada - t.salida;
-    });
-
-    // Actualizar saldos y ordenar transacciones
     const final = await Caja.findOneAndUpdate(
       { _id: caja._id },
       { 
-        $set: { 
-          saldos,
-          transacciones: updated.transacciones
-        }
+        transacciones: transaccionesActualizadas,
+        saldos
       },
       { new: true }
     );
@@ -166,51 +146,33 @@ router.put('/transacciones/:id', async (req, res) => {
   }
 });
 
-// Agregar esta ruta temporal en caja.js
-router.post('/corregir-fechas', async (req, res) => {
-  try {
-    const caja = await Caja.findOne();
-    
-    // Corregir cada transacción
-    const transaccionesCorregidas = caja.transacciones.map(transaccion => {
-      const fechaOriginal = new Date(transaccion.fecha);
-      fechaOriginal.setHours(12, 0, 0, 0); // Establecer la hora al mediodía
-      fechaOriginal.setDate(fechaOriginal.getDate() + 4); // Sumar 4 días
-      
-      return {
-        ...transaccion.toObject(),
-        fecha: fechaOriginal
-      };
-    });
+// Función para recalcular saldos
+const recalcularSaldos = (transacciones) => {
+  let currentSaldoUSD = 0;
+  let currentSaldoBs = 0;
+  
+  const transaccionesConSaldo = transacciones.map(t => {
+    if (t.moneda === 'USD') {
+      currentSaldoUSD += t.entrada - t.salida;
+      return { ...t.toObject ? t.toObject() : t, saldo: currentSaldoUSD };
+    } else {
+      currentSaldoBs += t.entrada - t.salida;
+      return { ...t.toObject ? t.toObject() : t, saldo: currentSaldoBs };
+    }
+  });
 
-    // Actualizar la caja con las fechas corregidas
-    const updated = await Caja.findOneAndUpdate(
-      { _id: caja._id },
-      { 
-        $set: { 
-          transacciones: transaccionesCorregidas,
-          saldos: caja.saldos
-        }
-      },
-      { new: true }
-    );
+  return {
+    transacciones: transaccionesConSaldo,
+    saldos: {
+      USD: currentSaldoUSD,
+      Bs: currentSaldoBs
+    }
+  };
+};
 
-    res.json({ 
-      message: 'Fechas corregidas exitosamente',
-      transacciones: updated.transacciones
-    });
-  } catch (error) {
-    res.status(500).json({ 
-      message: 'Error al corregir las fechas', 
-      error: error.message 
-    });
-  }
-});
-
-// Funciones auxiliares
+// Funciones auxiliares existentes
 const validarCampos = ({ tasaCambio, fecha, concepto, moneda }) => {
   const errors = {};
-  // Validar que la fecha sea válida usando Date
   const fechaObj = new Date(fecha);
   if (isNaN(fechaObj.getTime())) errors.fecha = 'Fecha inválida';
   if (!concepto) errors.concepto = 'Concepto requerido';
@@ -226,9 +188,8 @@ const crearTransaccion = (fecha, concepto, moneda, entrada, salida, tasaCambio, 
   const entradaNum = parseFloat(entrada) || 0;
   const salidaNum = parseFloat(salida) || 0;
   
-  // Asegurarnos de que la fecha se maneje correctamente
   const fechaObj = new Date(fecha);
-  fechaObj.setHours(12, 0, 0, 0); // Establecer la hora al mediodía para evitar problemas de zona horaria
+  fechaObj.setHours(12, 0, 0, 0);
   
   return {
     fecha: fechaObj,
