@@ -119,8 +119,12 @@ router.put('/transacciones/:id', async (req, res) => {
       return res.status(404).json({ message: 'Transacción no encontrada' });
     }
 
-    // Asegurarnos de que la fecha se maneje correctamente
-    const fechaFormateada = moment.tz(fecha, 'America/Caracas').startOf('day').toDate();
+    // Modificar el manejo de la fecha
+    const fechaFormateada = new Date(fecha).toLocaleDateString('es-VE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
 
     // Actualizar la transacción existente
     const updated = await Caja.findOneAndUpdate(
@@ -172,10 +176,15 @@ router.post('/corregir-fechas', async (req, res) => {
   try {
     const caja = await Caja.findOne();
     
-    // Corregir cada transacción sumando 4 días
+    // Corregir cada transacción usando toLocaleDateString
     const transaccionesCorregidas = caja.transacciones.map(transaccion => {
-      const fechaOriginal = moment(transaccion.fecha);
-      const fechaCorregida = fechaOriginal.add(4, 'days').format('YYYY-MM-DD');
+      const fechaOriginal = new Date(transaccion.fecha);
+      const fechaCorregida = new Date(fechaOriginal.setDate(fechaOriginal.getDate() + 4))
+        .toLocaleDateString('es-VE', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
       
       return {
         ...transaccion.toObject(),
@@ -210,7 +219,9 @@ router.post('/corregir-fechas', async (req, res) => {
 // Funciones auxiliares
 const validarCampos = ({ tasaCambio, fecha, concepto, moneda }) => {
   const errors = {};
-  if (!moment(fecha).isValid()) errors.fecha = 'Fecha inválida';
+  // Validar que la fecha sea válida usando Date
+  const fechaObj = new Date(fecha);
+  if (isNaN(fechaObj.getTime())) errors.fecha = 'Fecha inválida';
   if (!concepto) errors.concepto = 'Concepto requerido';
   if (!['USD', 'Bs'].includes(moneda)) errors.moneda = 'Moneda inválida';
   if (isNaN(tasaCambio) || tasaCambio <= 0) errors.tasaCambio = 'Tasa inválida';
@@ -224,8 +235,15 @@ const crearTransaccion = (fecha, concepto, moneda, entrada, salida, tasaCambio, 
   const entradaNum = parseFloat(entrada) || 0;
   const salidaNum = parseFloat(salida) || 0;
   
+  // Modificar para usar toLocaleDateString
+  const fechaFormateada = new Date(fecha).toLocaleDateString('es-VE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+  
   return {
-    fecha: moment.tz(fecha, 'America/Caracas').toDate(),
+    fecha: fechaFormateada,
     concepto,
     moneda,
     entrada: entradaNum,
