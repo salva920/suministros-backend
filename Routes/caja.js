@@ -109,40 +109,139 @@ router.delete('/transacciones/:id', async (req, res) => {
 router.put('/transacciones/:id', async (req, res) => {
   try {
     const { fecha, concepto, moneda, entrada, salida, tasaCambio } = req.body;
+    
+    // Validación y obtención de transacción existente
     const validacion = validarCampos(req.body);
     if (validacion.error) return res.status(400).json(validacion);
 
     const caja = await Caja.findOne();
-    const index = caja.transacciones.findIndex(t => t._id.toString() === req.params.id);
+    const transaccionIndex = caja.transacciones.findIndex(t => t._id.toString() === req.params.id);
     
-    if (index === -1) return res.status(404).json({ message: 'Transacción no encontrada' });
+    if (transaccionIndex === -1) {
+      return res.status(404).json({ message: 'Transacción no encontrada' });
+    }
 
-    // Actualizar transacción
-    const updatedTransaccion = crearTransaccion(fecha, concepto, moneda, entrada, salida, tasaCambio, caja);
-    let transaccionesActualizadas = [...caja.transacciones];
-    transaccionesActualizadas[index] = updatedTransaccion;
-    
-    // Reordenar por fecha
-    transaccionesActualizadas = transaccionesActualizadas.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-    
-    // Recalcular saldos secuencialmente
-    const { saldos } = recalcularSaldos(transaccionesActualizadas);
+    // Actualizar datos principales
+    caja.transacciones[transaccionIndex] = {
+      ...caja.transacciones[transaccionIndex].toObject(),
+      fecha: new Date(fecha),
+      concepto,
+      moneda,
+      entrada: parseFloat(entrada) || 0,
+      salida: parseFloat(salida) || 0,
+      tasaCambio: parseFloat(tasaCambio)
+    };
 
-    const final = await Caja.findOneAndUpdate(
+    // 1. Reordenar todas las transacciones por fecha
+    const transaccionesOrdenadas = caja.transacciones.sort((a, b) => a.fecha - b.fecha);
+
+    // 2. Recalcular saldos desde cero
+    let currentSaldoUSD = 0;
+    let currentSaldoBs = 0;
+    
+    const transaccionesActualizadas = transaccionesOrdenadas.map(t => {
+      if (t.moneda === 'USD') {
+        currentSaldoUSD += t.entrada - t.salida;
+        return { ...t, saldo: currentSaldoUSD };
+      } else {
+        currentSaldoBs += t.entrada - t.salida;
+        return { ...t, saldo: currentSaldoBs };
+      }
+    });
+
+    // 3. Actualizar documento completo
+    const updated = await Caja.findOneAndUpdate(
       { _id: caja._id },
-      { 
+      {
         transacciones: transaccionesActualizadas,
-        saldos
+        saldos: {
+          USD: currentSaldoUSD,
+          Bs: currentSaldoBs
+        }
       },
       { new: true }
     );
 
-    res.json({ 
-      transacciones: final.transacciones, 
-      saldos: final.saldos 
+    res.json({
+      transacciones: updated.transacciones,
+      saldos: updated.saldos
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error al actualizar la transacción', error: error.message });
+    res.status(500).json({ message: 'Error al actualizar transacción', error: error.message });
+  }
+});
+
+// Agregar nueva ruta para validación y corrección de saldos
+router.post('/validar-saldos', async (req, res) => {
+  try {
+    const caja = await Caja.findOne();
+    
+    if (!caja) {
+      return res.status(404).json({ message: 'Caja no encontrada' });
+    }
+
+    console.log('=== Iniciando validación de saldos ===');
+    console.log('Saldos actuales:', caja.saldos);
+    
+    let saldoUSD = 0;
+    let saldoBs = 0;
+    
+    // Ordenar transacciones por fecha ascendente
+    const transaccionesCorregidas = caja.transacciones
+      .sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
+      .map(t => {
+        if (t.moneda === 'USD') {
+          saldoUSD += t.entrada - t.salida;
+          console.log(
+            `USD | ${moment.utc(t.fecha).format('YYYY-MM-DD HH:mm:ss')} | ` +
+            `${t.concepto} | ` +
+            `Entrada: ${t.entrada} | ` +
+            `Salida: ${t.salida} | ` +
+            `Saldo: ${saldoUSD}`
+          );
+          return { ...t.toObject(), saldo: saldoUSD };
+        } else {
+          saldoBs += t.entrada - t.salida;
+          console.log(
+            `Bs | ${moment.utc(t.fecha).format('YYYY-MM-DD HH:mm:ss')} | ` +
+            `${t.concepto} | ` +
+            `Entrada: ${t.entrada} | ` +
+            `Salida: ${t.salida} | ` +
+            `Saldo: ${saldoBs}`
+          );
+          return { ...t.toObject(), saldo: saldoBs };
+        }
+      });
+
+    console.log('\n=== Resumen de la validación ===');
+    console.log('Saldo USD actual:', caja.saldos.USD);
+    console.log('Saldo USD calculado:', saldoUSD);
+    console.log('Saldo Bs actual:', caja.saldos.Bs);
+    console.log('Saldo Bs calculado:', saldoBs);
+
+    // Actualizar la caja con los saldos corregidos
+    const updated = await Caja.findOneAndUpdate(
+      { _id: caja._id },
+      {
+        transacciones: transaccionesCorregidas,
+        saldos: { USD: saldoUSD, Bs: saldoBs }
+      },
+      { new: true }
+    );
+
+    res.json({
+      message: 'Validación completada',
+      saldosAnteriores: caja.saldos,
+      saldosNuevos: { USD: saldoUSD, Bs: saldoBs },
+      transacciones: updated.transacciones
+    });
+
+  } catch (error) {
+    console.error('Error en la validación:', error);
+    res.status(500).json({ 
+      message: 'Error al validar saldos', 
+      error: error.message 
+    });
   }
 });
 
