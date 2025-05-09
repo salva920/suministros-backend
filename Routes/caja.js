@@ -167,6 +167,46 @@ router.put('/transacciones/:id', async (req, res) => {
   }
 });
 
+// Agregar esta ruta temporal en caja.js
+router.post('/corregir-fechas', async (req, res) => {
+  try {
+    const caja = await Caja.findOne();
+    
+    // Corregir cada transacción sumando 4 días
+    const transaccionesCorregidas = caja.transacciones.map(transaccion => {
+      const fechaOriginal = moment(transaccion.fecha);
+      const fechaCorregida = fechaOriginal.add(4, 'days').format('YYYY-MM-DD');
+      
+      return {
+        ...transaccion.toObject(),
+        fecha: fechaCorregida
+      };
+    });
+
+    // Actualizar la caja con las fechas corregidas
+    const updated = await Caja.findOneAndUpdate(
+      { _id: caja._id },
+      { 
+        $set: { 
+          transacciones: transaccionesCorregidas,
+          saldos: caja.saldos
+        }
+      },
+      { new: true }
+    );
+
+    res.json({ 
+      message: 'Fechas corregidas exitosamente',
+      transacciones: updated.transacciones
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      message: 'Error al corregir las fechas', 
+      error: error.message 
+    });
+  }
+});
+
 // Funciones auxiliares
 const validarCampos = ({ tasaCambio, fecha, concepto, moneda }) => {
   const errors = {};
