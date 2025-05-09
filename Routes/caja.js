@@ -121,10 +121,14 @@ router.put('/transacciones/:id', async (req, res) => {
       return res.status(404).json({ message: 'Transacción no encontrada' });
     }
 
-    // Actualizar datos principales
+    // Convertir fecha a UTC explícitamente
+    const fechaUTC = new Date(fecha);
+    fechaUTC.setUTCHours(12, 0, 0, 0);
+
+    // Actualizar datos principales con fecha UTC
     caja.transacciones[transaccionIndex] = {
       ...caja.transacciones[transaccionIndex].toObject(),
-      fecha: new Date(fecha),
+      fecha: fechaUTC,
       concepto,
       moneda,
       entrada: parseFloat(entrada) || 0,
@@ -132,8 +136,12 @@ router.put('/transacciones/:id', async (req, res) => {
       tasaCambio: parseFloat(tasaCambio)
     };
 
-    // 1. Reordenar todas las transacciones por fecha
-    const transaccionesOrdenadas = caja.transacciones.sort((a, b) => a.fecha - b.fecha);
+    // 1. Reordenar todas las transacciones por fecha usando UTC
+    const transaccionesOrdenadas = caja.transacciones.sort((a, b) => {
+      const fechaA = new Date(a.fecha);
+      const fechaB = new Date(b.fecha);
+      return fechaA.getTime() - fechaB.getTime();
+    });
 
     // 2. Recalcular saldos desde cero
     let currentSaldoUSD = 0;
@@ -170,6 +178,7 @@ router.put('/transacciones/:id', async (req, res) => {
     res.status(500).json({ message: 'Error al actualizar transacción', error: error.message });
   }
 });
+
 // Función para recalcular saldos
 const recalcularSaldos = (transacciones) => {
   let currentSaldoUSD = 0;
@@ -198,6 +207,8 @@ const recalcularSaldos = (transacciones) => {
 const validarCampos = ({ tasaCambio, fecha, concepto, moneda }) => {
   const errors = {};
   const fechaObj = new Date(fecha);
+  fechaObj.setUTCHours(12, 0, 0, 0);
+  
   if (isNaN(fechaObj.getTime())) errors.fecha = 'Fecha inválida';
   if (!concepto) errors.concepto = 'Concepto requerido';
   if (!['USD', 'Bs'].includes(moneda)) errors.moneda = 'Moneda inválida';
@@ -212,11 +223,12 @@ const crearTransaccion = (fecha, concepto, moneda, entrada, salida, tasaCambio, 
   const entradaNum = parseFloat(entrada) || 0;
   const salidaNum = parseFloat(salida) || 0;
   
-  const fechaObj = new Date(fecha);
-  fechaObj.setHours(12, 0, 0, 0);
+  // Convertir fecha a UTC explícitamente
+  const fechaUTC = new Date(fecha);
+  fechaUTC.setUTCHours(12, 0, 0, 0);
   
   return {
-    fecha: fechaObj,
+    fecha: fechaUTC,
     concepto,
     moneda,
     entrada: entradaNum,
