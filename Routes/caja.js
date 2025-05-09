@@ -119,19 +119,16 @@ router.put('/transacciones/:id', async (req, res) => {
       return res.status(404).json({ message: 'Transacción no encontrada' });
     }
 
-    // Modificar el manejo de la fecha
-    const fechaFormateada = new Date(fecha).toLocaleDateString('es-VE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    // Asegurarnos de que la fecha se maneje correctamente
+    const fechaObj = new Date(fecha);
+    fechaObj.setHours(12, 0, 0, 0); // Establecer la hora al mediodía
 
     // Actualizar la transacción existente
     const updated = await Caja.findOneAndUpdate(
       { _id: caja._id, 'transacciones._id': req.params.id },
       { 
         $set: {
-          'transacciones.$.fecha': fechaFormateada,
+          'transacciones.$.fecha': fechaObj,
           'transacciones.$.concepto': concepto,
           'transacciones.$.moneda': moneda,
           'transacciones.$.entrada': parseFloat(entrada) || 0,
@@ -176,19 +173,15 @@ router.post('/corregir-fechas', async (req, res) => {
   try {
     const caja = await Caja.findOne();
     
-    // Corregir cada transacción usando toLocaleDateString
+    // Corregir cada transacción
     const transaccionesCorregidas = caja.transacciones.map(transaccion => {
       const fechaOriginal = new Date(transaccion.fecha);
-      const fechaCorregida = new Date(fechaOriginal.setDate(fechaOriginal.getDate() + 4))
-        .toLocaleDateString('es-VE', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        });
+      fechaOriginal.setHours(12, 0, 0, 0); // Establecer la hora al mediodía
+      fechaOriginal.setDate(fechaOriginal.getDate() + 4); // Sumar 4 días
       
       return {
         ...transaccion.toObject(),
-        fecha: fechaCorregida
+        fecha: fechaOriginal
       };
     });
 
@@ -235,15 +228,12 @@ const crearTransaccion = (fecha, concepto, moneda, entrada, salida, tasaCambio, 
   const entradaNum = parseFloat(entrada) || 0;
   const salidaNum = parseFloat(salida) || 0;
   
-  // Modificar para usar toLocaleDateString
-  const fechaFormateada = new Date(fecha).toLocaleDateString('es-VE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  });
+  // Asegurarnos de que la fecha se maneje correctamente
+  const fechaObj = new Date(fecha);
+  fechaObj.setHours(12, 0, 0, 0); // Establecer la hora al mediodía para evitar problemas de zona horaria
   
   return {
-    fecha: fechaFormateada,
+    fecha: fechaObj,
     concepto,
     moneda,
     entrada: entradaNum,
