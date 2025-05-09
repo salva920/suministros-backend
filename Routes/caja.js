@@ -184,13 +184,8 @@ const crearTransaccion = (fecha, concepto, moneda, entrada, salida, tasaCambio, 
   const entradaNum = parseFloat(entrada) || 0;
   const salidaNum = parseFloat(salida) || 0;
   
-  // Asegurar que la fecha se guarde en la zona horaria correcta
-  const fechaFormateada = moment.tz(fecha, 'America/Caracas')
-    .startOf('day')
-    .toDate();
-  
   return {
-    fecha: fechaFormateada,
+    fecha: moment.tz(fecha, 'America/Caracas').toDate(),
     concepto,
     moneda,
     entrada: entradaNum,
