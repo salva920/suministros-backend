@@ -205,7 +205,7 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
     const data = xlsx.utils.sheet_to_json(worksheet, {
       raw: false,
       defval: '',
-      header: 1 // Usar números como encabezados
+      header: 1
     });
 
     console.log('Datos leídos del Excel:', data.slice(0, 10));
@@ -226,7 +226,6 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
     const transacciones = data
       .slice(startRow)
       .filter(row => {
-        // Verificar que la fila tenga datos válidos
         const tieneDatos = row[3] && // FECHA
                           row[4] && // CONCEPTO
                           (row[5] || row[6]); // ENTRADA o SALIDA
@@ -242,12 +241,18 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
           // Procesar fecha
           let fecha;
           if (typeof row[3] === 'string') {
-            if (row[3].includes('/')) {
+            // Manejar formato ISO con hora
+            if (row[3].includes('-')) {
+              fecha = moment.utc(row[3].split(' ')[0], 'YYYY-MM-DD');
+            }
+            // Manejar formato de fecha local
+            else if (row[3].includes('/')) {
               const [day, month, year] = row[3].split('/');
-              fecha = moment.utc(`20${year}-${month}-${day}`).startOf('day');
+              fecha = moment.utc(`${year}-${month}-${day}`, 'YYYY-MM-DD');
             }
           }
 
+          // Validación adicional
           if (!fecha || !fecha.isValid()) {
             console.error('Fecha inválida:', row[3]);
             return null;
@@ -257,19 +262,17 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
           const procesarNumero = (valor) => {
             if (typeof valor === 'number') return valor;
             if (!valor) return 0;
-            // Remover cualquier carácter no numérico excepto punto y coma
             const limpio = String(valor).replace(/[^\d.,]/g, '');
-            // Reemplazar coma por punto
             return parseFloat(limpio.replace(',', '.')) || 0;
           };
 
-          const entrada = procesarNumero(row[5]); // ENTRADA
-          const salida = procesarNumero(row[6]); // SALIDA
-          const saldo = procesarNumero(row[7]); // SALDO
+          const entrada = procesarNumero(row[5]);
+          const salida = procesarNumero(row[6]);
+          const saldo = procesarNumero(row[7]);
 
           const transaccion = {
-            fecha: fecha.toDate(),
-            concepto: String(row[4]).trim(), // CONCEPTO
+            fecha: fecha.startOf('day').toDate(), // Asegurar que la fecha esté en UTC y al inicio del día
+            concepto: String(row[4]).trim(),
             moneda: 'USD',
             entrada: entrada,
             salida: salida,
@@ -299,13 +302,10 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       });
     }
 
-    // Ordenar transacciones
+    // Ordenar transacciones ascendentemente por fecha
     transacciones.sort((a, b) => {
       const fechaA = new Date(a.fecha);
       const fechaB = new Date(b.fecha);
-      if (fechaA.getTime() === fechaB.getTime()) {
-        return (b.entrada > 0 ? 1 : 0) - (a.entrada > 0 ? 1 : 0);
-      }
       return fechaA.getTime() - fechaB.getTime();
     });
 
