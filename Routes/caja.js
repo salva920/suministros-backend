@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const Caja = require('../models/caja');
 const moment = require('moment-timezone');
+const multer = require('multer');
+const xlsx = require('xlsx');
+const upload = multer({ dest: 'uploads/' });
 
 // Ruta para obtener la caja
 router.get('/', async (req, res) => {
@@ -176,6 +179,100 @@ router.put('/transacciones/:id', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Error al actualizar transacción', error: error.message });
+  }
+});
+
+// Ruta para importar Excel
+router.post('/importar-excel', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No se ha subido ningún archivo' });
+    }
+
+    // Leer el archivo Excel
+    const workbook = xlsx.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = xlsx.utils.sheet_to_json(worksheet);
+
+    // Validar el formato de las columnas
+    const requiredColumns = ['FECHA', 'CONCEPTO', 'ENTRADA', 'SALIDA', 'SALDO'];
+    const firstRow = data[0];
+    const missingColumns = requiredColumns.filter(col => !(col in firstRow));
+    
+    if (missingColumns.length > 0) {
+      return res.status(400).json({ 
+        message: 'El archivo Excel no tiene el formato correcto',
+        missingColumns 
+      });
+    }
+
+    // Procesar los datos con mejor manejo de fechas
+    const transacciones = data.map(row => {
+      const fecha = moment.utc(row.FECHA).startOf('day');
+      if (!fecha.isValid()) {
+        throw new Error(`Fecha inválida en la fila: ${JSON.stringify(row)}`);
+      }
+
+      return {
+        fecha: fecha.toDate(),
+        concepto: row.CONCEPTO,
+        moneda: 'USD',
+        entrada: parseFloat(row.ENTRADA) || 0,
+        salida: parseFloat(row.SALIDA) || 0,
+        saldo: parseFloat(row.SALDO) || 0
+      };
+    });
+
+    // Ordenar transacciones por fecha y por tipo (entrada antes que salida)
+    transacciones.sort((a, b) => {
+      const fechaA = new Date(a.fecha);
+      const fechaB = new Date(b.fecha);
+      
+      if (fechaA.getTime() === fechaB.getTime()) {
+        // Si es el mismo día, priorizar entradas sobre salidas
+        return (b.entrada > 0 ? 1 : 0) - (a.entrada > 0 ? 1 : 0);
+      }
+      return fechaA.getTime() - fechaB.getTime();
+    });
+
+    // Recalcular saldos secuencialmente
+    let currentSaldo = 0;
+    const transaccionesConSaldo = transacciones.map(t => {
+      currentSaldo += t.entrada - t.salida;
+      return {
+        ...t,
+        saldo: currentSaldo
+      };
+    });
+
+    // Actualizar la caja en la base de datos
+    const caja = await Caja.findOne();
+    const updated = await Caja.findOneAndUpdate(
+      { _id: caja._id },
+      {
+        transacciones: transaccionesConSaldo,
+        saldos: {
+          USD: currentSaldo,
+          Bs: 0
+        }
+      },
+      { new: true }
+    );
+
+    res.json({
+      message: 'Datos importados correctamente',
+      transacciones: updated.transacciones,
+      saldos: updated.saldos
+    });
+
+  } catch (error) {
+    console.error('Error al importar Excel:', error);
+    res.status(500).json({ 
+      message: 'Error al importar el archivo', 
+      error: error.message,
+      details: error.stack 
+    });
   }
 });
 
