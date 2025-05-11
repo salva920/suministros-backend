@@ -206,6 +206,8 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       header: 1
     });
 
+    console.log('Primeras 20 filas del Excel:', data.slice(0, 20));
+
     // Buscar la fila de encabezados
     let startRow = 0;
     for (let i = 0; i < data.length; i++) {
@@ -217,11 +219,14 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
     }
 
     // Saltar filas vacías o de título hasta la primera fila con fecha válida
-    let firstDataRow = startRow;
-    for (let i = startRow; i < data.length; i++) {
+    let firstDataRow = 0;
+    for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      // Considera válida si la celda de fecha tiene formato d/m/yyyy o dd/mm/yyyy
-      if (row[0] && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(row[0].trim())) {
+      // Si la celda de fecha es un número (fecha Excel) o un string con formato d/m/yyyy
+      if (
+        (typeof row[0] === 'number') ||
+        (typeof row[0] === 'string' && row[0].trim().match(/^\d{1,2}\/\d{1,2}\/\d{4}$/))
+      ) {
         firstDataRow = i;
         break;
       }
@@ -230,36 +235,31 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
     const transacciones = data
       .slice(firstDataRow)
       .filter(row => {
-        const tieneDatos = row[0] && row[1] && (row[2] || row[3]);
-        if (!tieneDatos) {
-          console.log('Fila filtrada (sin datos):', row);
-        }
-        return tieneDatos;
+        // Acepta filas con fecha y concepto y al menos entrada o salida
+        return row[0] && row[1] && (row[2] || row[3]);
       })
       .map(row => {
         try {
           let fecha;
-          if (typeof row[0] === 'string') {
-            if (row[0].includes('/')) {
-              const [day, month, year] = row[0].split('/');
-              fecha = moment.utc(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`, 'YYYY-MM-DD');
-            }
+          if (typeof row[0] === 'number') {
+            // Fecha en formato Excel
+            fecha = moment.utc(xlsx.SSF.parse_date_code(row[0]));
+          } else if (typeof row[0] === 'string' && row[0].includes('/')) {
+            const [day, month, year] = row[0].split('/');
+            fecha = moment.utc(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`, 'YYYY-MM-DD');
           }
           if (!fecha || !fecha.isValid()) {
             console.error('Fecha inválida:', row[0]);
             return null;
           }
-
           const procesarNumero = (valor) => {
             if (typeof valor === 'number') return valor;
             if (!valor) return 0;
             const limpio = String(valor).replace(/[^\d.,]/g, '');
             return parseFloat(limpio.replace(',', '.')) || 0;
           };
-
           const entrada = procesarNumero(row[2]);
           const salida = procesarNumero(row[3]);
-
           return {
             fecha: fecha.toDate(),
             concepto: String(row[1]).trim(),
