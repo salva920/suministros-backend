@@ -241,18 +241,15 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
           // Procesar fecha
           let fecha;
           if (typeof row[3] === 'string') {
-            // Manejar formato ISO con hora
-            if (row[3].includes('-')) {
-              fecha = moment.utc(row[3].split(' ')[0], 'YYYY-MM-DD');
-            }
-            // Manejar formato de fecha local
-            else if (row[3].includes('/')) {
+            // Manejar formato de fecha local (dd/mm/yy)
+            if (row[3].includes('/')) {
               const [day, month, year] = row[3].split('/');
-              fecha = moment.utc(`${year}-${month}-${day}`, 'YYYY-MM-DD');
+              // Asumimos que el año está en formato de dos dígitos
+              const fullYear = parseInt(year) < 50 ? `20${year}` : `19${year}`;
+              fecha = moment.utc(`${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
             }
           }
 
-          // Validación adicional
           if (!fecha || !fecha.isValid()) {
             console.error('Fecha inválida:', row[3]);
             return null;
@@ -271,7 +268,7 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
           const saldo = procesarNumero(row[7]);
 
           const transaccion = {
-            fecha: fecha.startOf('day').toDate(), // Asegurar que la fecha esté en UTC y al inicio del día
+            fecha: fecha.toDate(),
             concepto: String(row[4]).trim(),
             moneda: 'USD',
             entrada: entrada,
@@ -279,7 +276,10 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
             saldo: saldo
           };
 
-          console.log('Transacción procesada:', transaccion);
+          console.log('Transacción procesada:', {
+            ...transaccion,
+            fecha: fecha.format('YYYY-MM-DD')
+          });
           return transaccion;
         } catch (error) {
           console.error('Error procesando fila:', row, error);
@@ -289,7 +289,10 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       .filter(t => t !== null);
 
     console.log('Número de transacciones procesadas:', transacciones.length);
-    console.log('Primeras 5 transacciones:', transacciones.slice(0, 5));
+    console.log('Primeras 5 transacciones:', transacciones.slice(0, 5).map(t => ({
+      ...t,
+      fecha: moment.utc(t.fecha).format('YYYY-MM-DD')
+    })));
 
     if (transacciones.length === 0) {
       return res.status(400).json({ 
@@ -302,16 +305,21 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       });
     }
 
-    // Ordenar transacciones ascendentemente por fecha
-    transacciones.sort((a, b) => {
-      const fechaA = new Date(a.fecha);
-      const fechaB = new Date(b.fecha);
-      return fechaA.getTime() - fechaB.getTime();
+    // Ordenar transacciones por fecha
+    const transaccionesOrdenadas = transacciones.sort((a, b) => {
+      const fechaA = moment.utc(a.fecha);
+      const fechaB = moment.utc(b.fecha);
+      return fechaA.valueOf() - fechaB.valueOf();
     });
+
+    console.log('Transacciones ordenadas:', transaccionesOrdenadas.slice(0, 5).map(t => ({
+      ...t,
+      fecha: moment.utc(t.fecha).format('YYYY-MM-DD')
+    })));
 
     // Recalcular saldos
     let currentSaldo = 0;
-    const transaccionesConSaldo = transacciones.map(t => {
+    const transaccionesConSaldo = transaccionesOrdenadas.map(t => {
       currentSaldo += t.entrada - t.salida;
       return {
         ...t,
@@ -337,9 +345,16 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       { new: true }
     );
 
+    // Ordenar las transacciones antes de enviarlas al frontend
+    const transaccionesFinales = updated.transacciones.sort((a, b) => {
+      const fechaA = moment.utc(a.fecha);
+      const fechaB = moment.utc(b.fecha);
+      return fechaA.valueOf() - fechaB.valueOf();
+    });
+
     res.json({
       message: 'Datos importados correctamente',
-      transacciones: updated.transacciones,
+      transacciones: transaccionesFinales,
       saldos: updated.saldos
     });
 
