@@ -4,7 +4,14 @@ const Caja = require('../models/caja');
 const moment = require('moment-timezone');
 const multer = require('multer');
 const xlsx = require('xlsx');
-const upload = multer({ dest: 'uploads/' });
+
+// Cambiar la configuración de multer para usar memoria en lugar de disco
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // límite de 5MB
+  }
+});
 
 // Ruta para obtener la caja
 router.get('/', async (req, res) => {
@@ -189,8 +196,8 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       return res.status(400).json({ message: 'No se ha subido ningún archivo' });
     }
 
-    // Leer el archivo Excel
-    const workbook = xlsx.readFile(req.file.path);
+    // Leer el archivo Excel desde el buffer en memoria
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(worksheet);
@@ -207,8 +214,9 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       });
     }
 
-    // Procesar los datos con mejor manejo de fechas
+    // Procesar los datos
     const transacciones = data.map(row => {
+      // Convertir fecha a UTC
       const fecha = moment.utc(row.FECHA).startOf('day');
       if (!fecha.isValid()) {
         throw new Error(`Fecha inválida en la fila: ${JSON.stringify(row)}`);
