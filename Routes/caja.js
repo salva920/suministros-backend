@@ -196,66 +196,49 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       return res.status(400).json({ message: 'No se ha subido ningún archivo' });
     }
 
-    // Leer el archivo Excel
     const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
 
-    // Convertir a JSON sin encabezados predefinidos
     const data = xlsx.utils.sheet_to_json(worksheet, {
       raw: false,
       defval: '',
       header: 1
     });
 
-    console.log('Datos leídos del Excel:', data.slice(0, 10));
-
-    // Encontrar la fila donde comienzan los datos reales
+    // Buscar encabezados en columnas 0 y 1
     let startRow = 0;
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      if (row[3] === 'FECHA' && row[4] === 'CONCEPTO') {
+      if (row[0] === 'FECHA' && row[1] === 'CONCEPTO') {
         startRow = i + 1;
         break;
       }
     }
 
-    console.log('Fila de inicio:', startRow);
-
-    // Procesar las transacciones
     const transacciones = data
       .slice(startRow)
       .filter(row => {
-        const tieneDatos = row[3] && // FECHA
-                          row[4] && // CONCEPTO
-                          (row[5] || row[6]); // ENTRADA o SALIDA
-        
+        const tieneDatos = row[0] && row[1] && (row[2] || row[3]);
         if (!tieneDatos) {
           console.log('Fila filtrada (sin datos):', row);
         }
-        
         return tieneDatos;
       })
       .map(row => {
         try {
-          // Procesar fecha
           let fecha;
-          if (typeof row[3] === 'string') {
-            // Manejar formato de fecha local (dd/mm/yy)
-            if (row[3].includes('/')) {
-              const [day, month, year] = row[3].split('/');
-              // Asumimos que el año está en formato de dos dígitos
-              const fullYear = parseInt(year) < 50 ? `20${year}` : `19${year}`;
-              fecha = moment.utc(`${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+          if (typeof row[0] === 'string') {
+            if (row[0].includes('/')) {
+              const [day, month, year] = row[0].split('/');
+              fecha = moment.utc(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`, 'YYYY-MM-DD');
             }
           }
-
           if (!fecha || !fecha.isValid()) {
-            console.error('Fecha inválida:', row[3]);
+            console.error('Fecha inválida:', row[0]);
             return null;
           }
 
-          // Procesar valores numéricos
           const procesarNumero = (valor) => {
             if (typeof valor === 'number') return valor;
             if (!valor) return 0;
@@ -263,24 +246,17 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
             return parseFloat(limpio.replace(',', '.')) || 0;
           };
 
-          const entrada = procesarNumero(row[5]);
-          const salida = procesarNumero(row[6]);
-          const saldo = procesarNumero(row[7]);
+          const entrada = procesarNumero(row[2]);
+          const salida = procesarNumero(row[3]);
 
-          const transaccion = {
+          return {
             fecha: fecha.toDate(),
-            concepto: String(row[4]).trim(),
+            concepto: String(row[1]).trim(),
             moneda: 'USD',
-            entrada: entrada,
-            salida: salida,
-            saldo: saldo
+            entrada,
+            salida,
+            saldo: 0
           };
-
-          console.log('Transacción procesada:', {
-            ...transaccion,
-            fecha: fecha.format('YYYY-MM-DD')
-          });
-          return transaccion;
         } catch (error) {
           console.error('Error procesando fila:', row, error);
           return null;
@@ -288,46 +264,14 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       })
       .filter(t => t !== null);
 
-    console.log('Número de transacciones procesadas:', transacciones.length);
-    console.log('Primeras 5 transacciones:', transacciones.slice(0, 5).map(t => ({
-      ...t,
-      fecha: moment.utc(t.fecha).format('YYYY-MM-DD')
-    })));
+    transacciones.sort((a, b) => moment.utc(a.fecha).valueOf() - moment.utc(b.fecha).valueOf());
 
-    if (transacciones.length === 0) {
-      return res.status(400).json({ 
-        message: 'No se encontraron transacciones válidas en el archivo',
-        debug: {
-          dataLength: data.length,
-          firstRow: data[0],
-          rawData: data.slice(0, 5)
-        }
-      });
-    }
-
-    // Ordenar transacciones por fecha
-    const transaccionesOrdenadas = transacciones.sort((a, b) => {
-      const fechaA = moment.utc(a.fecha);
-      const fechaB = moment.utc(b.fecha);
-      return fechaA.valueOf() - fechaB.valueOf();
-    });
-
-    console.log('Transacciones ordenadas:', transaccionesOrdenadas.slice(0, 5).map(t => ({
-      ...t,
-      fecha: moment.utc(t.fecha).format('YYYY-MM-DD')
-    })));
-
-    // Recalcular saldos
     let currentSaldo = 0;
-    const transaccionesConSaldo = transaccionesOrdenadas.map(t => {
+    const transaccionesConSaldo = transacciones.map(t => {
       currentSaldo += t.entrada - t.salida;
-      return {
-        ...t,
-        saldo: currentSaldo
-      };
+      return { ...t, saldo: currentSaldo };
     });
 
-    // Actualizar la caja
     const caja = await Caja.findOne();
     if (!caja) {
       return res.status(404).json({ message: 'No se encontró la caja' });
@@ -345,16 +289,9 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       { new: true }
     );
 
-    // Ordenar las transacciones antes de enviarlas al frontend
-    const transaccionesFinales = updated.transacciones.sort((a, b) => {
-      const fechaA = moment.utc(a.fecha);
-      const fechaB = moment.utc(b.fecha);
-      return fechaA.valueOf() - fechaB.valueOf();
-    });
-
     res.json({
       message: 'Datos importados correctamente',
-      transacciones: transaccionesFinales,
+      transacciones: updated.transacciones,
       saldos: updated.saldos
     });
 
