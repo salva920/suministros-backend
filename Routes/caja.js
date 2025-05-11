@@ -224,17 +224,18 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       range: startRow
     });
 
-    console.log('Datos leídos del Excel:', JSON.stringify(data, null, 2));
+    console.log('Primeras 5 filas del Excel:', data.slice(0, 5));
 
     // Filtrar y procesar las transacciones
     const transacciones = data
       .filter(row => {
+        // Verificar que la fila tenga datos válidos
         const tieneDatos = row.FECHA && 
                           row.CONCEPTO && 
                           (row.ENTRADA || row.SALIDA);
         
         if (!tieneDatos) {
-          console.log('Fila filtrada:', row);
+          console.log('Fila filtrada (sin datos):', row);
         }
         
         return tieneDatos;
@@ -244,11 +245,18 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
           // Procesar fecha
           let fecha;
           if (typeof row.FECHA === 'string') {
+            // Intentar diferentes formatos de fecha
             if (row.FECHA.includes('/')) {
               const [day, month, year] = row.FECHA.split('/');
               fecha = moment.utc(`${year}-${month}-${day}`).startOf('day');
-            } else {
+            } else if (row.FECHA.includes('-')) {
               fecha = moment.utc(row.FECHA).startOf('day');
+            } else {
+              // Intentar parsear como número de Excel
+              const excelDate = parseFloat(row.FECHA);
+              if (!isNaN(excelDate)) {
+                fecha = moment.utc(new Date((excelDate - 25569) * 86400 * 1000)).startOf('day');
+              }
             }
           } else if (row.FECHA instanceof Date) {
             fecha = moment.utc(row.FECHA).startOf('day');
@@ -260,9 +268,18 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
           }
 
           // Procesar valores numéricos
-          const entrada = parseFloat(String(row.ENTRADA || '0').replace(',', '.')) || 0;
-          const salida = parseFloat(String(row.SALIDA || '0').replace(',', '.')) || 0;
-          const saldo = parseFloat(String(row.SALDO || '0').replace(',', '.')) || 0;
+          const procesarNumero = (valor) => {
+            if (typeof valor === 'number') return valor;
+            if (!valor) return 0;
+            // Remover cualquier carácter no numérico excepto punto y coma
+            const limpio = String(valor).replace(/[^\d.,]/g, '');
+            // Reemplazar coma por punto
+            return parseFloat(limpio.replace(',', '.')) || 0;
+          };
+
+          const entrada = procesarNumero(row.ENTRADA);
+          const salida = procesarNumero(row.SALIDA);
+          const saldo = procesarNumero(row.SALDO);
 
           const transaccion = {
             fecha: fecha.toDate(),
@@ -282,7 +299,8 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       })
       .filter(t => t !== null);
 
-    console.log('Transacciones finales:', JSON.stringify(transacciones, null, 2));
+    console.log('Número de transacciones procesadas:', transacciones.length);
+    console.log('Primeras 5 transacciones:', transacciones.slice(0, 5));
 
     if (transacciones.length === 0) {
       return res.status(400).json({ 
@@ -290,7 +308,7 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
         debug: {
           dataLength: data.length,
           firstRow: data[0],
-          rawData: data
+          rawData: data.slice(0, 5)
         }
       });
     }
