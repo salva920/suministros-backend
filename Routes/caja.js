@@ -215,9 +215,8 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
         try {
           let fecha;
           if (typeof row[3] === 'string' && row[3].includes('/')) {
-            // Formato d/m/yy o dd/mm/yy
+            // DÍA/MES/AÑO
             const [day, month, year] = row[3].split('/');
-            // Si el año es de dos dígitos, asume 20xx
             const fullYear = year.length === 2 ? `20${year}` : year;
             fecha = moment.utc(`${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`, 'YYYY-MM-DD');
           }
