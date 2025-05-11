@@ -206,44 +206,19 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       header: 1
     });
 
-    console.log('Primeras 20 filas del Excel:', data.slice(0, 20));
+    console.log('Primeras 25 filas del Excel:', data.slice(0, 25));
 
-    // Buscar la fila de encabezados
-    let startRow = 0;
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      if (row[0] && row[0].toString().toUpperCase().includes('FECHA') && row[1] && row[1].toString().toUpperCase().includes('CONCEPTO')) {
-        startRow = i + 1;
-        break;
-      }
-    }
-
-    // Saltar filas vacías o de título hasta la primera fila con fecha válida
-    let firstDataRow = 0;
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      // Si la celda de fecha es un número (fecha Excel) o un string con formato d/m/yyyy
-      if (
-        (typeof row[0] === 'number') ||
-        (typeof row[0] === 'string' && row[0].trim().match(/^\d{1,2}\/\d{1,2}\/\d{4}$/))
-      ) {
-        firstDataRow = i;
-        break;
-      }
-    }
+    const firstDataRow = 16; // Línea 17 en Excel
 
     const transacciones = data
       .slice(firstDataRow)
-      .filter(row => {
-        // Acepta filas con fecha y concepto y al menos entrada o salida
-        return row[0] && row[1] && (row[2] || row[3]);
-      })
+      .filter(row => row[0] && row[1] && (row[2] || row[3]))
       .map(row => {
         try {
           let fecha;
           if (typeof row[0] === 'number') {
-            // Fecha en formato Excel
-            fecha = moment.utc(xlsx.SSF.parse_date_code(row[0]));
+            const excelDate = xlsx.SSF.parse_date_code(row[0]);
+            fecha = moment.utc(new Date(excelDate.y, excelDate.m - 1, excelDate.d));
           } else if (typeof row[0] === 'string' && row[0].includes('/')) {
             const [day, month, year] = row[0].split('/');
             fecha = moment.utc(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`, 'YYYY-MM-DD');
@@ -274,6 +249,8 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
         }
       })
       .filter(t => t !== null);
+
+    console.log('Transacciones detectadas:', transacciones.length, transacciones.slice(0, 5));
 
     transacciones.sort((a, b) => moment.utc(a.fecha).valueOf() - moment.utc(b.fecha).valueOf());
 
