@@ -209,16 +209,16 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
     console.log('Filas 17 a 34 del Excel:', data.slice(16, 34));
 
     const transacciones = data
-      .slice(16, 34)
+      .slice(16)
       .map((row, idx) => {
-        console.log(`Fila ${16 + idx + 1}:`, row);
         try {
           let fecha;
           if (typeof row[3] === 'string' && row[3].includes('/')) {
             // DÍA/MES/AÑO
             const [day, month, year] = row[3].split('/');
             const fullYear = year.length === 2 ? `20${year}` : year;
-            fecha = moment.utc(`${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`, 'YYYY-MM-DD');
+            const fechaString = `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            fecha = moment.utc(fechaString, 'YYYY-MM-DD');
           }
           if (!fecha || !fecha.isValid()) {
             console.error('Fecha inválida:', row[3]);
