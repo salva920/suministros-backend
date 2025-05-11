@@ -206,18 +206,29 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       header: 1
     });
 
-    // Buscar encabezados en columnas 0 y 1
+    // Buscar la fila de encabezados
     let startRow = 0;
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      if (row[0] === 'FECHA' && row[1] === 'CONCEPTO') {
+      if (row[0] && row[0].toString().toUpperCase().includes('FECHA') && row[1] && row[1].toString().toUpperCase().includes('CONCEPTO')) {
         startRow = i + 1;
         break;
       }
     }
 
+    // Saltar filas vacías o de título hasta la primera fila con fecha válida
+    let firstDataRow = startRow;
+    for (let i = startRow; i < data.length; i++) {
+      const row = data[i];
+      // Considera válida si la celda de fecha tiene formato d/m/yyyy o dd/mm/yyyy
+      if (row[0] && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(row[0].trim())) {
+        firstDataRow = i;
+        break;
+      }
+    }
+
     const transacciones = data
-      .slice(startRow)
+      .slice(firstDataRow)
       .filter(row => {
         const tieneDatos = row[0] && row[1] && (row[2] || row[3]);
         if (!tieneDatos) {
