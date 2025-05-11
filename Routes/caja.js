@@ -201,38 +201,35 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
 
-    // Obtener el rango de datos
-    const range = xlsx.utils.decode_range(worksheet['!ref']);
-    console.log('Rango del Excel:', range);
-
-    // Encontrar la fila donde comienzan los datos
-    let startRow = 0;
-    for (let R = range.s.r; R <= range.e.r; R++) {
-      const cell = worksheet[xlsx.utils.encode_cell({ r: R, c: 0 })];
-      if (cell && cell.v === 'FECHA') {
-        startRow = R + 1;
-        break;
-      }
-    }
-    console.log('Fila de inicio:', startRow);
-
-    // Convertir a JSON empezando desde la fila de datos
+    // Convertir a JSON sin encabezados predefinidos
     const data = xlsx.utils.sheet_to_json(worksheet, {
       raw: false,
       defval: '',
-      header: ['FECHA', 'CONCEPTO', 'ENTRADA', 'SALIDA', 'SALDO'],
-      range: startRow
+      header: 1 // Usar números como encabezados
     });
 
-    console.log('Primeras 5 filas del Excel:', data.slice(0, 5));
+    console.log('Datos leídos del Excel:', data.slice(0, 10));
 
-    // Filtrar y procesar las transacciones
+    // Encontrar la fila donde comienzan los datos reales
+    let startRow = 0;
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (row[3] === 'FECHA' && row[4] === 'CONCEPTO') {
+        startRow = i + 1;
+        break;
+      }
+    }
+
+    console.log('Fila de inicio:', startRow);
+
+    // Procesar las transacciones
     const transacciones = data
+      .slice(startRow)
       .filter(row => {
         // Verificar que la fila tenga datos válidos
-        const tieneDatos = row.FECHA && 
-                          row.CONCEPTO && 
-                          (row.ENTRADA || row.SALIDA);
+        const tieneDatos = row[3] && // FECHA
+                          row[4] && // CONCEPTO
+                          (row[5] || row[6]); // ENTRADA o SALIDA
         
         if (!tieneDatos) {
           console.log('Fila filtrada (sin datos):', row);
@@ -244,26 +241,15 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
         try {
           // Procesar fecha
           let fecha;
-          if (typeof row.FECHA === 'string') {
-            // Intentar diferentes formatos de fecha
-            if (row.FECHA.includes('/')) {
-              const [day, month, year] = row.FECHA.split('/');
-              fecha = moment.utc(`${year}-${month}-${day}`).startOf('day');
-            } else if (row.FECHA.includes('-')) {
-              fecha = moment.utc(row.FECHA).startOf('day');
-            } else {
-              // Intentar parsear como número de Excel
-              const excelDate = parseFloat(row.FECHA);
-              if (!isNaN(excelDate)) {
-                fecha = moment.utc(new Date((excelDate - 25569) * 86400 * 1000)).startOf('day');
-              }
+          if (typeof row[3] === 'string') {
+            if (row[3].includes('/')) {
+              const [day, month, year] = row[3].split('/');
+              fecha = moment.utc(`20${year}-${month}-${day}`).startOf('day');
             }
-          } else if (row.FECHA instanceof Date) {
-            fecha = moment.utc(row.FECHA).startOf('day');
           }
 
           if (!fecha || !fecha.isValid()) {
-            console.error('Fecha inválida:', row.FECHA);
+            console.error('Fecha inválida:', row[3]);
             return null;
           }
 
@@ -277,13 +263,13 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
             return parseFloat(limpio.replace(',', '.')) || 0;
           };
 
-          const entrada = procesarNumero(row.ENTRADA);
-          const salida = procesarNumero(row.SALIDA);
-          const saldo = procesarNumero(row.SALDO);
+          const entrada = procesarNumero(row[5]); // ENTRADA
+          const salida = procesarNumero(row[6]); // SALIDA
+          const saldo = procesarNumero(row[7]); // SALDO
 
           const transaccion = {
             fecha: fecha.toDate(),
-            concepto: String(row.CONCEPTO).trim(),
+            concepto: String(row[4]).trim(), // CONCEPTO
             moneda: 'USD',
             entrada: entrada,
             salida: salida,
