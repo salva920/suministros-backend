@@ -206,38 +206,36 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       header: 1
     });
 
-    // Imprime las filas 17 a 34 para depuración
     console.log('Filas 17 a 34 del Excel:', data.slice(16, 34));
 
-    // Procesa solo esas filas
     const transacciones = data
       .slice(16, 34)
       .map((row, idx) => {
-        console.log(`Fila ${16 + idx + 1}:`, row); // Imprime cada fila para ver su contenido
+        console.log(`Fila ${16 + idx + 1}:`, row);
         try {
           let fecha;
-          if (typeof row[0] === 'number') {
-            const excelDate = xlsx.SSF.parse_date_code(row[0]);
-            fecha = moment.utc(new Date(excelDate.y, excelDate.m - 1, excelDate.d));
-          } else if (typeof row[0] === 'string' && row[0].includes('/')) {
-            const [day, month, year] = row[0].split('/');
-            fecha = moment.utc(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`, 'YYYY-MM-DD');
+          if (typeof row[3] === 'string' && row[3].includes('/')) {
+            // Formato d/m/yy o dd/mm/yy
+            const [day, month, year] = row[3].split('/');
+            // Si el año es de dos dígitos, asume 20xx
+            const fullYear = year.length === 2 ? `20${year}` : year;
+            fecha = moment.utc(`${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`, 'YYYY-MM-DD');
           }
           if (!fecha || !fecha.isValid()) {
-            console.error('Fecha inválida:', row[0]);
+            console.error('Fecha inválida:', row[3]);
             return null;
           }
           const procesarNumero = (valor) => {
             if (typeof valor === 'number') return valor;
             if (!valor) return 0;
-            const limpio = String(valor).replace(/[^\d.,]/g, '');
-            return parseFloat(limpio.replace(',', '.')) || 0;
+            const limpio = String(valor).replace(/[^\d.,-]/g, '').replace(',', '.');
+            return parseFloat(limpio) || 0;
           };
-          const entrada = procesarNumero(row[2]);
-          const salida = procesarNumero(row[3]);
+          const entrada = procesarNumero(row[5]);
+          const salida = procesarNumero(row[6]);
           return {
             fecha: fecha.toDate(),
-            concepto: String(row[1]).trim(),
+            concepto: String(row[4]).trim(),
             moneda: 'USD',
             entrada,
             salida,
