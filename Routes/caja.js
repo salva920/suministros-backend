@@ -201,23 +201,43 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
 
-    // Convertir a JSON con opciones específicas
+    // Obtener el rango de datos
+    const range = xlsx.utils.decode_range(worksheet['!ref']);
+    console.log('Rango del Excel:', range);
+
+    // Encontrar la fila donde comienzan los datos
+    let startRow = 0;
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      const cell = worksheet[xlsx.utils.encode_cell({ r: R, c: 0 })];
+      if (cell && cell.v === 'FECHA') {
+        startRow = R + 1;
+        break;
+      }
+    }
+    console.log('Fila de inicio:', startRow);
+
+    // Convertir a JSON empezando desde la fila de datos
     const data = xlsx.utils.sheet_to_json(worksheet, {
       raw: false,
       defval: '',
-      header: ['FECHA', 'CONCEPTO', 'ENTRADA', 'SALIDA', 'SALDO']
+      header: ['FECHA', 'CONCEPTO', 'ENTRADA', 'SALIDA', 'SALDO'],
+      range: startRow
     });
 
-    console.log('Datos leídos del Excel:', data); // Debug
+    console.log('Datos leídos del Excel:', JSON.stringify(data, null, 2));
 
-    // Filtrar filas vacías y procesar transacciones
+    // Filtrar y procesar las transacciones
     const transacciones = data
       .filter(row => {
-        // Verificar que la fila tenga fecha y concepto
-        return row.FECHA && 
-               row.CONCEPTO && 
-               row.FECHA !== 'FECHA' && // Excluir la fila de encabezados
-               (row.ENTRADA || row.SALIDA); // Debe tener entrada o salida
+        const tieneDatos = row.FECHA && 
+                          row.CONCEPTO && 
+                          (row.ENTRADA || row.SALIDA);
+        
+        if (!tieneDatos) {
+          console.log('Fila filtrada:', row);
+        }
+        
+        return tieneDatos;
       })
       .map(row => {
         try {
@@ -244,7 +264,7 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
           const salida = parseFloat(String(row.SALIDA || '0').replace(',', '.')) || 0;
           const saldo = parseFloat(String(row.SALDO || '0').replace(',', '.')) || 0;
 
-          return {
+          const transaccion = {
             fecha: fecha.toDate(),
             concepto: String(row.CONCEPTO).trim(),
             moneda: 'USD',
@@ -252,6 +272,9 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
             salida: salida,
             saldo: saldo
           };
+
+          console.log('Transacción procesada:', transaccion);
+          return transaccion;
         } catch (error) {
           console.error('Error procesando fila:', row, error);
           return null;
@@ -259,12 +282,16 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       })
       .filter(t => t !== null);
 
-    console.log('Transacciones procesadas:', transacciones); // Debug
+    console.log('Transacciones finales:', JSON.stringify(transacciones, null, 2));
 
     if (transacciones.length === 0) {
       return res.status(400).json({ 
         message: 'No se encontraron transacciones válidas en el archivo',
-        debug: { dataLength: data.length, firstRow: data[0] }
+        debug: {
+          dataLength: data.length,
+          firstRow: data[0],
+          rawData: data
+        }
       });
     }
 
