@@ -196,78 +196,75 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       return res.status(400).json({ message: 'No se ha subido ningún archivo' });
     }
 
-    // Leer el archivo Excel desde el buffer en memoria
+    // Leer el archivo Excel
     const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    
-    // Obtener el rango de datos
-    const range = xlsx.utils.decode_range(worksheet['!ref']);
-    
-    // Encontrar la fila donde comienzan los datos (después de los encabezados)
-    let startRow = 0;
-    for (let R = range.s.r; R <= range.e.r; R++) {
-      const cell = worksheet[xlsx.utils.encode_cell({ r: R, c: 0 })];
-      if (cell && cell.v === 'FECHA') {
-        startRow = R + 1;
-        break;
-      }
-    }
 
-    // Convertir a JSON empezando desde la fila de datos
+    // Convertir a JSON con opciones específicas
     const data = xlsx.utils.sheet_to_json(worksheet, {
       raw: false,
       defval: '',
-      header: ['FECHA', 'CONCEPTO', 'ENTRADA', 'SALIDA', 'SALDO'],
-      range: startRow
+      header: ['FECHA', 'CONCEPTO', 'ENTRADA', 'SALIDA', 'SALDO']
     });
 
     console.log('Datos leídos del Excel:', data); // Debug
 
-    // Filtrar y procesar las transacciones
+    // Filtrar filas vacías y procesar transacciones
     const transacciones = data
-      .filter(row => row.FECHA && row.CONCEPTO && (row.ENTRADA || row.SALIDA))
+      .filter(row => {
+        // Verificar que la fila tenga fecha y concepto
+        return row.FECHA && 
+               row.CONCEPTO && 
+               row.FECHA !== 'FECHA' && // Excluir la fila de encabezados
+               (row.ENTRADA || row.SALIDA); // Debe tener entrada o salida
+      })
       .map(row => {
-        // Convertir fecha
-        let fecha;
         try {
-          if (row.FECHA.includes('/')) {
-            const [day, month, year] = row.FECHA.split('/');
-            fecha = moment.utc(`${year}-${month}-${day}`).startOf('day');
-          } else {
+          // Procesar fecha
+          let fecha;
+          if (typeof row.FECHA === 'string') {
+            if (row.FECHA.includes('/')) {
+              const [day, month, year] = row.FECHA.split('/');
+              fecha = moment.utc(`${year}-${month}-${day}`).startOf('day');
+            } else {
+              fecha = moment.utc(row.FECHA).startOf('day');
+            }
+          } else if (row.FECHA instanceof Date) {
             fecha = moment.utc(row.FECHA).startOf('day');
           }
-          
-          if (!fecha.isValid()) {
+
+          if (!fecha || !fecha.isValid()) {
             console.error('Fecha inválida:', row.FECHA);
             return null;
           }
+
+          // Procesar valores numéricos
+          const entrada = parseFloat(String(row.ENTRADA || '0').replace(',', '.')) || 0;
+          const salida = parseFloat(String(row.SALIDA || '0').replace(',', '.')) || 0;
+          const saldo = parseFloat(String(row.SALDO || '0').replace(',', '.')) || 0;
+
+          return {
+            fecha: fecha.toDate(),
+            concepto: String(row.CONCEPTO).trim(),
+            moneda: 'USD',
+            entrada: entrada,
+            salida: salida,
+            saldo: saldo
+          };
         } catch (error) {
-          console.error('Error al procesar fecha:', row.FECHA, error);
+          console.error('Error procesando fila:', row, error);
           return null;
         }
-
-        // Convertir valores numéricos
-        const entrada = parseFloat((row.ENTRADA || '0').toString().replace(',', '.')) || 0;
-        const salida = parseFloat((row.SALIDA || '0').toString().replace(',', '.')) || 0;
-        const saldo = parseFloat((row.SALDO || '0').toString().replace(',', '.')) || 0;
-
-        return {
-          fecha: fecha.toDate(),
-          concepto: row.CONCEPTO.toString().trim(),
-          moneda: 'USD',
-          entrada: entrada,
-          salida: salida,
-          saldo: saldo
-        };
       })
-      .filter(t => t !== null); // Eliminar transacciones inválidas
+      .filter(t => t !== null);
 
     console.log('Transacciones procesadas:', transacciones); // Debug
 
     if (transacciones.length === 0) {
       return res.status(400).json({ 
-        message: 'No se encontraron transacciones válidas en el archivo' 
+        message: 'No se encontraron transacciones válidas en el archivo',
+        debug: { dataLength: data.length, firstRow: data[0] }
       });
     }
 
@@ -275,7 +272,6 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
     transacciones.sort((a, b) => {
       const fechaA = new Date(a.fecha);
       const fechaB = new Date(b.fecha);
-      
       if (fechaA.getTime() === fechaB.getTime()) {
         return (b.entrada > 0 ? 1 : 0) - (a.entrada > 0 ? 1 : 0);
       }
@@ -291,8 +287,6 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
         saldo: currentSaldo
       };
     });
-
-    console.log('Transacciones con saldo:', transaccionesConSaldo); // Debug
 
     // Actualizar la caja
     const caja = await Caja.findOne();
@@ -311,8 +305,6 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       },
       { new: true }
     );
-
-    console.log('Caja actualizada:', updated); // Debug
 
     res.json({
       message: 'Datos importados correctamente',
