@@ -206,14 +206,14 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       header: 1
     });
 
-    console.log('Primeras 25 filas del Excel:', data.slice(0, 25));
+    // Imprime las filas 17 a 34 para depuración
+    console.log('Filas 17 a 34 del Excel:', data.slice(16, 34));
 
-    const firstDataRow = 16; // Línea 17 en Excel
-
+    // Procesa solo esas filas
     const transacciones = data
-      .slice(firstDataRow)
-      .filter(row => row[0] && row[1] && (row[2] || row[3]))
-      .map(row => {
+      .slice(16, 34)
+      .map((row, idx) => {
+        console.log(`Fila ${16 + idx + 1}:`, row); // Imprime cada fila para ver su contenido
         try {
           let fecha;
           if (typeof row[0] === 'number') {
@@ -250,7 +250,16 @@ router.post('/importar-excel', upload.single('file'), async (req, res) => {
       })
       .filter(t => t !== null);
 
-    console.log('Transacciones detectadas:', transacciones.length, transacciones.slice(0, 5));
+    console.log('Transacciones detectadas:', transacciones.length, transacciones);
+
+    if (transacciones.length === 0) {
+      return res.status(400).json({ 
+        message: 'No se encontraron transacciones válidas en el archivo',
+        debug: {
+          filas: data.slice(16, 34)
+        }
+      });
+    }
 
     transacciones.sort((a, b) => moment.utc(a.fecha).valueOf() - moment.utc(b.fecha).valueOf());
 
