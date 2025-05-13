@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Caja = require('../models/caja');
+const mongoose = require('mongoose');
 const multer = require('multer');
 const xlsx = require('xlsx');
 const Joi = require('joi');
@@ -38,6 +39,50 @@ const validateTransaction = (data) => {
   });
 };
 
+// Obtener una transacción específica
+router.get('/transacciones/:id', async (req, res) => {
+  try {
+    // Validar que el ID sea un ObjectId válido
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de transacción inválido'
+      });
+    }
+
+    const caja = await Caja.findOne({ 
+      'transacciones._id': new mongoose.Types.ObjectId(req.params.id) 
+    });
+
+    if (!caja) {
+      return res.status(404).json({
+        success: false,
+        message: 'No se encontró la caja con esta transacción'
+      });
+    }
+
+    const transaccion = caja.transacciones.find(t => t._id.toString() === req.params.id);
+
+    if (!transaccion) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transacción no encontrada'
+      });
+    }
+
+    res.json({
+      success: true,
+      transaccion
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener la transacción',
+      error: error.message
+    });
+  }
+});
+
 // Obtener caja con transacciones ordenadas
 router.get('/', async (req, res) => {
   try {
@@ -50,30 +95,35 @@ router.get('/', async (req, res) => {
     );
 
     res.json({
+      success: true,
       transacciones: transaccionesOrdenadas,
       saldos: caja.saldos,
       id: caja._id
     });
   } catch (error) {
     res.status(500).json({ 
+      success: false,
       message: 'Error al obtener la caja', 
       error: error.message 
     });
   }
 });
 
-// Registrar nueva transacción con validación mejorada
+// Registrar nueva transacción
 router.post('/transacciones', async (req, res) => {
   try {
     const { error } = validateTransaction(req.body);
     if (error) return res.status(400).json({ 
-      error: true, 
+      success: false,
       message: 'Errores de validación',
       details: error.details.map(d => d.message)
     });
 
     const caja = await Caja.findOne();
-    if (!caja) return res.status(404).json({ message: 'Caja no encontrada' });
+    if (!caja) return res.status(404).json({ 
+      success: false,
+      message: 'Caja no encontrada' 
+    });
 
     const { fecha, concepto, moneda, entrada, salida, tasaCambio } = req.body;
     
@@ -101,11 +151,13 @@ router.post('/transacciones', async (req, res) => {
     );
 
     res.json({
+      success: true,
       transacciones: updated.transacciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
       saldos: updated.saldos
     });
   } catch (error) {
     res.status(500).json({ 
+      success: false,
       message: 'Error al agregar transacción', 
       error: error.message 
     });
@@ -136,43 +188,20 @@ router.get('/transacciones', async (req, res) => {
   }
 });
 
-// Eliminar transacción
-router.delete('/transacciones/:id', async (req, res) => {
-  try {
-    const caja = await Caja.findOne();
-    const transaccion = caja.transacciones.id(req.params.id);
-    
-    if (!transaccion) return res.status(404).json({ message: 'Transacción no encontrada' });
-
-    // Eliminar y recalcular saldos
-    const transaccionAEliminar = caja.transacciones.find(t => t._id.toString() === req.params.id);
-    const moneda = transaccionAEliminar.moneda;
-    const monto = transaccionAEliminar.entrada - transaccionAEliminar.salida;
-
-    const updated = await Caja.findOneAndUpdate(
-      { _id: caja._id },
-      { 
-        $pull: { transacciones: { _id: req.params.id } },
-        $inc: { [`saldos.${moneda}`]: -monto }
-      },
-      { new: true }
-    );
-
-    res.json({
-      transacciones: updated.transacciones,
-      saldos: updated.saldos
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error al eliminar la transacción', error: error.message });
-  }
-});
-
 // Actualizar transacción
 router.put('/transacciones/:id', async (req, res) => {
   try {
+    // Validar ID
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de transacción inválido'
+      });
+    }
+
     const { error } = validateTransaction(req.body);
     if (error) return res.status(400).json({ 
-      error: true, 
+      success: false,
       message: 'Errores de validación',
       details: error.details.map(d => d.message)
     });
@@ -181,7 +210,10 @@ router.put('/transacciones/:id', async (req, res) => {
     const transaccionIndex = caja.transacciones.findIndex(t => t._id.toString() === req.params.id);
     
     if (transaccionIndex === -1) {
-      return res.status(404).json({ message: 'Transacción no encontrada' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Transacción no encontrada' 
+      });
     }
 
     const { fecha, concepto, moneda, entrada, salida, tasaCambio } = req.body;
@@ -217,11 +249,65 @@ router.put('/transacciones/:id', async (req, res) => {
     );
 
     res.json({
+      success: true,
       transacciones: updated.transacciones,
       saldos: updated.saldos
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error al actualizar transacción', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al actualizar transacción', 
+      error: error.message 
+    });
+  }
+});
+
+// Eliminar transacción
+router.delete('/transacciones/:id', async (req, res) => {
+  try {
+    // Validar ID
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de transacción inválido'
+      });
+    }
+
+    const caja = await Caja.findOne();
+    const transaccion = caja.transacciones.id(req.params.id);
+    
+    if (!transaccion) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Transacción no encontrada' 
+      });
+    }
+
+    // Eliminar y recalcular saldos
+    const transaccionAEliminar = caja.transacciones.find(t => t._id.toString() === req.params.id);
+    const moneda = transaccionAEliminar.moneda;
+    const monto = transaccionAEliminar.entrada - transaccionAEliminar.salida;
+
+    const updated = await Caja.findOneAndUpdate(
+      { _id: caja._id },
+      { 
+        $pull: { transacciones: { _id: req.params.id } },
+        $inc: { [`saldos.${moneda}`]: -monto }
+      },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      transacciones: updated.transacciones,
+      saldos: updated.saldos
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al eliminar la transacción', 
+      error: error.message 
+    });
   }
 });
 
