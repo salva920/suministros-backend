@@ -1,17 +1,16 @@
 const mongoose = require('mongoose');
 const mongoosePaginate = require('mongoose-paginate-v2');
-const moment = require('moment-timezone');
 
 const transaccionSchema = new mongoose.Schema({
   fecha: {
     type: Date,
     required: true,
-    get: (v) => moment.utc(v).tz('America/Caracas').format('YYYY-MM-DD HH:mm:ss'),
     index: -1
   },
   concepto: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   moneda: {
     type: String,
@@ -20,38 +19,50 @@ const transaccionSchema = new mongoose.Schema({
   },
   entrada: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   salida: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   saldo: {
     type: Number,
     required: true
+  },
+  tasaCambio: {
+    type: Number,
+    required: true,
+    min: 0.01
+  }
+}, { timestamps: false });
+
+transaccionSchema.set('toJSON', {
+  virtuals: true,
+  versionKey: false,
+  transform: function(doc, ret) {
+    ret.id = ret._id;
+    delete ret._id;
   }
 });
-
-// Habilitar getters en las queries
-transaccionSchema.set('toObject', { getters: true });
-transaccionSchema.set('toJSON', { getters: true });
 
 const cajaSchema = new mongoose.Schema({
   transacciones: [transaccionSchema],
   saldos: {
     USD: {
       type: Number,
-      default: 0
+      default: 0,
+      min: 0
     },
     Bs: {
       type: Number,
-      default: 0
+      default: 0,
+      min: 0
     }
-  },
-  
+  }
 });
 
-// Agregar el plugin de paginación
 cajaSchema.plugin(mongoosePaginate);
 
 module.exports = mongoose.model('Caja', cajaSchema);
