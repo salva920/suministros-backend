@@ -194,6 +194,7 @@ router.get('/transacciones', async (req, res) => {
 
 // Función auxiliar para validar ObjectId
 const isValidObjectId = (id) => {
+  if (!id) return false;
   return mongoose.Types.ObjectId.isValid(id);
 };
 
@@ -201,9 +202,11 @@ const isValidObjectId = (id) => {
 router.put('/transacciones/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('ID recibido:', id); // Para debugging
     
     // Validar el ID
     if (!isValidObjectId(id)) {
+      console.log('ID inválido:', id); // Para debugging
       return res.status(400).json({
         success: false,
         message: 'ID de transacción inválido'
@@ -228,6 +231,8 @@ router.put('/transacciones/:id', async (req, res) => {
     }
 
     const transaccionIndex = caja.transacciones.findIndex(t => t._id.toString() === id);
+    console.log('Índice de transacción:', transaccionIndex); // Para debugging
+    
     if (transaccionIndex === -1) {
       return res.status(404).json({ 
         success: false,
@@ -280,7 +285,7 @@ router.put('/transacciones/:id', async (req, res) => {
       saldos: updated.saldos
     });
   } catch (error) {
-    console.error('Error al actualizar transacción:', error);
+    console.error('Error al actualizar:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al actualizar transacción', 
@@ -292,8 +297,11 @@ router.put('/transacciones/:id', async (req, res) => {
 // Eliminar transacción
 router.delete('/transacciones/:id', async (req, res) => {
   try {
-    // Validar ID
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    const { id } = req.params;
+    console.log('ID a eliminar:', id); // Para debugging
+    
+    if (!isValidObjectId(id)) {
+      console.log('ID inválido:', id); // Para debugging
       return res.status(400).json({
         success: false,
         message: 'ID de transacción inválido'
@@ -301,8 +309,14 @@ router.delete('/transacciones/:id', async (req, res) => {
     }
 
     const caja = await Caja.findOne();
-    const transaccion = caja.transacciones.id(req.params.id);
-    
+    if (!caja) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Caja no encontrada' 
+      });
+    }
+
+    const transaccion = caja.transacciones.id(id);
     if (!transaccion) {
       return res.status(404).json({ 
         success: false,
@@ -311,14 +325,14 @@ router.delete('/transacciones/:id', async (req, res) => {
     }
 
     // Eliminar y recalcular saldos
-    const transaccionAEliminar = caja.transacciones.find(t => t._id.toString() === req.params.id);
+    const transaccionAEliminar = caja.transacciones.find(t => t._id.toString() === id);
     const moneda = transaccionAEliminar.moneda;
     const monto = transaccionAEliminar.entrada - transaccionAEliminar.salida;
 
     const updated = await Caja.findOneAndUpdate(
       { _id: caja._id },
       { 
-        $pull: { transacciones: { _id: req.params.id } },
+        $pull: { transacciones: { _id: id } },
         $inc: { [`saldos.${moneda}`]: -monto }
       },
       { new: true }
@@ -330,6 +344,7 @@ router.delete('/transacciones/:id', async (req, res) => {
       saldos: updated.saldos
     });
   } catch (error) {
+    console.error('Error al eliminar:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al eliminar la transacción', 
