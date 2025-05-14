@@ -28,10 +28,10 @@ const validateTransaction = (data) => {
     fecha: Joi.date().required(),
     concepto: Joi.string().trim().required().min(3).max(100),
     moneda: Joi.string().valid('USD', 'Bs').required(),
-    entrada: Joi.number().min(0).default(0),
-    salida: Joi.number().min(0).default(0),
+    tipo: Joi.string().valid('entrada', 'salida').required(),
+    monto: Joi.number().positive().required(),
     tasaCambio: Joi.number().positive().required()
-  }).or('entrada', 'salida');
+  });
 
   return schema.validate(data, { 
     abortEarly: false,
@@ -113,28 +113,32 @@ router.get('/', async (req, res) => {
 router.post('/transacciones', async (req, res) => {
   try {
     const { error } = validateTransaction(req.body);
-    if (error) return res.status(400).json({ 
-      success: false,
-      message: 'Errores de validación',
-      details: error.details.map(d => d.message)
-    });
+    if (error) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Errores de validación',
+        details: error.details.map(d => d.message)
+      });
+    }
 
     const caja = await Caja.findOne();
-    if (!caja) return res.status(404).json({ 
-      success: false,
-      message: 'Caja no encontrada' 
-    });
+    if (!caja) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Caja no encontrada' 
+      });
+    }
 
-    const { fecha, concepto, moneda, entrada, salida, tasaCambio } = req.body;
+    const { fecha, concepto, moneda, tipo, monto, tasaCambio } = req.body;
     
     const nuevaTransaccion = {
       fecha: formatDateToUTC(fecha),
       concepto,
       moneda,
-      entrada: parseFloat(entrada) || 0,
-      salida: parseFloat(salida) || 0,
+      entrada: tipo === 'entrada' ? parseFloat(monto) : 0,
+      salida: tipo === 'salida' ? parseFloat(monto) : 0,
       tasaCambio: parseFloat(tasaCambio),
-      saldo: caja.saldos[moneda] + (parseFloat(entrada) || 0) - (parseFloat(salida) || 0)
+      saldo: caja.saldos[moneda] + (tipo === 'entrada' ? parseFloat(monto) : -parseFloat(monto))
     };
 
     // Actualizar saldos
@@ -191,7 +195,6 @@ router.get('/transacciones', async (req, res) => {
 // Actualizar transacción
 router.put('/transacciones/:id', async (req, res) => {
   try {
-    // Validar ID
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({
         success: false,
@@ -200,11 +203,13 @@ router.put('/transacciones/:id', async (req, res) => {
     }
 
     const { error } = validateTransaction(req.body);
-    if (error) return res.status(400).json({ 
-      success: false,
-      message: 'Errores de validación',
-      details: error.details.map(d => d.message)
-    });
+    if (error) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Errores de validación',
+        details: error.details.map(d => d.message)
+      });
+    }
 
     const caja = await Caja.findOne();
     const transaccionIndex = caja.transacciones.findIndex(t => t._id.toString() === req.params.id);
@@ -216,12 +221,12 @@ router.put('/transacciones/:id', async (req, res) => {
       });
     }
 
-    const { fecha, concepto, moneda, entrada, salida, tasaCambio } = req.body;
+    const { fecha, concepto, moneda, tipo, monto, tasaCambio } = req.body;
     
     // Guardar valores antiguos para ajuste de saldo
     const transaccionOriginal = caja.transacciones[transaccionIndex];
     const montoOriginal = transaccionOriginal.entrada - transaccionOriginal.salida;
-    const montoNuevo = (parseFloat(entrada) || 0) - (parseFloat(salida) || 0);
+    const montoNuevo = tipo === 'entrada' ? parseFloat(monto) : -parseFloat(monto);
     const diferencia = montoNuevo - montoOriginal;
 
     // Actualizar transacción
@@ -230,8 +235,8 @@ router.put('/transacciones/:id', async (req, res) => {
       fecha: formatDateToUTC(fecha),
       concepto,
       moneda,
-      entrada: parseFloat(entrada) || 0,
-      salida: parseFloat(salida) || 0,
+      entrada: tipo === 'entrada' ? parseFloat(monto) : 0,
+      salida: tipo === 'salida' ? parseFloat(monto) : 0,
       tasaCambio: parseFloat(tasaCambio),
       saldo: transaccionOriginal.saldo + diferencia
     };
@@ -250,7 +255,7 @@ router.put('/transacciones/:id', async (req, res) => {
 
     res.json({
       success: true,
-      transacciones: updated.transacciones,
+      transacciones: updated.transacciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
       saldos: updated.saldos
     });
   } catch (error) {
