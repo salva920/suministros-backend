@@ -192,10 +192,18 @@ router.get('/transacciones', async (req, res) => {
   }
 });
 
+// Función auxiliar para validar ObjectId
+const isValidObjectId = (id) => {
+  return mongoose.Types.ObjectId.isValid(id);
+};
+
 // Actualizar transacción
 router.put('/transacciones/:id', async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    const { id } = req.params;
+    
+    // Validar el ID
+    if (!isValidObjectId(id)) {
       return res.status(400).json({
         success: false,
         message: 'ID de transacción inválido'
@@ -212,8 +220,14 @@ router.put('/transacciones/:id', async (req, res) => {
     }
 
     const caja = await Caja.findOne();
-    const transaccionIndex = caja.transacciones.findIndex(t => t._id.toString() === req.params.id);
-    
+    if (!caja) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Caja no encontrada' 
+      });
+    }
+
+    const transaccionIndex = caja.transacciones.findIndex(t => t._id.toString() === id);
     if (transaccionIndex === -1) {
       return res.status(404).json({ 
         success: false,
@@ -231,7 +245,7 @@ router.put('/transacciones/:id', async (req, res) => {
 
     // Actualizar transacción
     const transaccionActualizada = {
-      _id: transaccionOriginal._id,
+      _id: new mongoose.Types.ObjectId(id),
       fecha: formatDateToUTC(fecha),
       concepto,
       moneda,
@@ -243,7 +257,7 @@ router.put('/transacciones/:id', async (req, res) => {
 
     // Actualizar documento
     const updated = await Caja.findOneAndUpdate(
-      { _id: caja._id, 'transacciones._id': req.params.id },
+      { _id: caja._id, 'transacciones._id': id },
       { 
         $set: { 
           'transacciones.$': transaccionActualizada,
@@ -253,12 +267,20 @@ router.put('/transacciones/:id', async (req, res) => {
       { new: true }
     );
 
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message: 'No se pudo actualizar la transacción'
+      });
+    }
+
     res.json({
       success: true,
       transacciones: updated.transacciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
       saldos: updated.saldos
     });
   } catch (error) {
+    console.error('Error al actualizar transacción:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al actualizar transacción', 
