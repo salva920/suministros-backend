@@ -39,6 +39,18 @@ const validateTransaction = (data) => {
   });
 };
 
+// Función de ordenamiento común para todos los endpoints
+const ordenarTransacciones = (transacciones) => {
+  return transacciones.sort((a, b) => {
+    // Primero comparar por fecha (descendente)
+    const dateDiff = new Date(b.fecha) - new Date(a.fecha);
+    if (dateDiff !== 0) return dateDiff;
+    
+    // Si es el mismo día, ordenar por timestamp del ID (ascendente)
+    return a._id.getTimestamp() - b._id.getTimestamp();
+  });
+};
+
 // Obtener una transacción específica
 router.get('/transacciones/:id', async (req, res) => {
   try {
@@ -89,12 +101,8 @@ router.get('/', async (req, res) => {
     const caja = await Caja.findOne() || 
       await Caja.create({ transacciones: [], saldos: { USD: 0, Bs: 0 }});
     
-    // Ordenar transacciones por fecha descendente
-    const transaccionesOrdenadas = caja.transacciones.sort((a, b) => {
-      const dateDiff = new Date(b.fecha) - new Date(a.fecha);
-      if (dateDiff !== 0) return dateDiff;
-      return a._id.getTimestamp() - b._id.getTimestamp();
-    });
+    // Usar la nueva función de ordenamiento
+    const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
 
     res.json({
       success: true,
@@ -156,12 +164,8 @@ router.post('/transacciones', async (req, res) => {
       { new: true }
     );
 
-    // Ordenar las transacciones actualizadas
-    const transaccionesOrdenadas = updated.transacciones.sort((a, b) => {
-      const dateDiff = new Date(b.fecha) - new Date(a.fecha);
-      if (dateDiff !== 0) return dateDiff;
-      return a._id.getTimestamp() - b._id.getTimestamp();
-    });
+    // Usar la nueva función de ordenamiento
+    const transaccionesOrdenadas = ordenarTransacciones(updated.transacciones);
 
     res.json({
       success: true,
@@ -284,12 +288,8 @@ router.put('/transacciones/:id', async (req, res) => {
       });
     }
 
-    // Ordenar las transacciones actualizadas
-    const transaccionesOrdenadas = updated.transacciones.sort((a, b) => {
-      const dateDiff = new Date(b.fecha) - new Date(a.fecha);
-      if (dateDiff !== 0) return dateDiff;
-      return a._id.getTimestamp() - b._id.getTimestamp();
-    });
+    // Usar la nueva función de ordenamiento
+    const transaccionesOrdenadas = ordenarTransacciones(updated.transacciones);
 
     res.json({
       success: true,
@@ -349,12 +349,8 @@ router.delete('/transacciones/:id', async (req, res) => {
       { new: true }
     );
 
-    // Ordenar las transacciones actualizadas
-    const transaccionesOrdenadas = updated.transacciones.sort((a, b) => {
-      const dateDiff = new Date(b.fecha) - new Date(a.fecha);
-      if (dateDiff !== 0) return dateDiff;
-      return a._id.getTimestamp() - b._id.getTimestamp();
-    });
+    // Usar la nueva función de ordenamiento
+    const transaccionesOrdenadas = ordenarTransacciones(updated.transacciones);
 
     res.json({
       success: true,
