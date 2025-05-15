@@ -90,9 +90,11 @@ router.get('/', async (req, res) => {
       await Caja.create({ transacciones: [], saldos: { USD: 0, Bs: 0 }});
     
     // Ordenar transacciones por fecha descendente
-    const transaccionesOrdenadas = caja.transacciones.sort((a, b) => 
-      new Date(b.fecha) - new Date(a.fecha)
-    );
+    const transaccionesOrdenadas = caja.transacciones.sort((a, b) => {
+      const dateDiff = new Date(b.fecha) - new Date(a.fecha);
+      if (dateDiff !== 0) return dateDiff;
+      return a._id.getTimestamp() - b._id.getTimestamp();
+    });
 
     res.json({
       success: true,
@@ -154,9 +156,16 @@ router.post('/transacciones', async (req, res) => {
       { new: true }
     );
 
+    // Ordenar las transacciones actualizadas
+    const transaccionesOrdenadas = updated.transacciones.sort((a, b) => {
+      const dateDiff = new Date(b.fecha) - new Date(a.fecha);
+      if (dateDiff !== 0) return dateDiff;
+      return a._id.getTimestamp() - b._id.getTimestamp();
+    });
+
     res.json({
       success: true,
-      transacciones: updated.transacciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
+      transacciones: transaccionesOrdenadas,
       saldos: updated.saldos
     });
   } catch (error) {
@@ -202,11 +211,10 @@ const isValidObjectId = (id) => {
 router.put('/transacciones/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('ID recibido:', id); // Para debugging
+    console.log('ID recibido:', id);
     
-    // Validar el ID
     if (!isValidObjectId(id)) {
-      console.log('ID inválido:', id); // Para debugging
+      console.log('ID inválido:', id);
       return res.status(400).json({
         success: false,
         message: 'ID de transacción inválido'
@@ -231,7 +239,7 @@ router.put('/transacciones/:id', async (req, res) => {
     }
 
     const transaccionIndex = caja.transacciones.findIndex(t => t._id.toString() === id);
-    console.log('Índice de transacción:', transaccionIndex); // Para debugging
+    console.log('Índice de transacción:', transaccionIndex);
     
     if (transaccionIndex === -1) {
       return res.status(404).json({ 
@@ -242,13 +250,11 @@ router.put('/transacciones/:id', async (req, res) => {
 
     const { fecha, concepto, moneda, tipo, monto, tasaCambio } = req.body;
     
-    // Guardar valores antiguos para ajuste de saldo
     const transaccionOriginal = caja.transacciones[transaccionIndex];
     const montoOriginal = transaccionOriginal.entrada - transaccionOriginal.salida;
     const montoNuevo = tipo === 'entrada' ? parseFloat(monto) : -parseFloat(monto);
     const diferencia = montoNuevo - montoOriginal;
 
-    // Actualizar transacción
     const transaccionActualizada = {
       _id: new mongoose.Types.ObjectId(id),
       fecha: formatDateToUTC(fecha),
@@ -260,7 +266,6 @@ router.put('/transacciones/:id', async (req, res) => {
       saldo: transaccionOriginal.saldo + diferencia
     };
 
-    // Actualizar documento
     const updated = await Caja.findOneAndUpdate(
       { _id: caja._id, 'transacciones._id': id },
       { 
@@ -279,9 +284,16 @@ router.put('/transacciones/:id', async (req, res) => {
       });
     }
 
+    // Ordenar las transacciones actualizadas
+    const transaccionesOrdenadas = updated.transacciones.sort((a, b) => {
+      const dateDiff = new Date(b.fecha) - new Date(a.fecha);
+      if (dateDiff !== 0) return dateDiff;
+      return a._id.getTimestamp() - b._id.getTimestamp();
+    });
+
     res.json({
       success: true,
-      transacciones: updated.transacciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
+      transacciones: transaccionesOrdenadas,
       saldos: updated.saldos
     });
   } catch (error) {
@@ -298,10 +310,10 @@ router.put('/transacciones/:id', async (req, res) => {
 router.delete('/transacciones/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('ID a eliminar:', id); // Para debugging
+    console.log('ID a eliminar:', id);
     
     if (!isValidObjectId(id)) {
-      console.log('ID inválido:', id); // Para debugging
+      console.log('ID inválido:', id);
       return res.status(400).json({
         success: false,
         message: 'ID de transacción inválido'
@@ -324,7 +336,6 @@ router.delete('/transacciones/:id', async (req, res) => {
       });
     }
 
-    // Eliminar y recalcular saldos
     const transaccionAEliminar = caja.transacciones.find(t => t._id.toString() === id);
     const moneda = transaccionAEliminar.moneda;
     const monto = transaccionAEliminar.entrada - transaccionAEliminar.salida;
@@ -338,9 +349,16 @@ router.delete('/transacciones/:id', async (req, res) => {
       { new: true }
     );
 
+    // Ordenar las transacciones actualizadas
+    const transaccionesOrdenadas = updated.transacciones.sort((a, b) => {
+      const dateDiff = new Date(b.fecha) - new Date(a.fecha);
+      if (dateDiff !== 0) return dateDiff;
+      return a._id.getTimestamp() - b._id.getTimestamp();
+    });
+
     res.json({
       success: true,
-      transacciones: updated.transacciones,
+      transacciones: transaccionesOrdenadas,
       saldos: updated.saldos
     });
   } catch (error) {
