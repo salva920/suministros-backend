@@ -47,7 +47,7 @@ const ordenarTransacciones = (transacciones) => {
     if (dateDiff !== 0) return dateDiff;
     
     // Si es el mismo día, ordenar por timestamp del ID (ascendente)
-    return a._id.getTimestamp() - b._id.getTimestamp();
+    return b._id.getTimestamp() - a._id.getTimestamp();
   });
 };
 
