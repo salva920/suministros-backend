@@ -326,37 +326,28 @@ router.post('/:id/entradas', async (req, res) => {
     if (!producto) {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
-    
-    const cantidad = Number(req.body.cantidad) || 0;
-    if (cantidad <= 0) {
-      return res.status(400).json({ message: 'La cantidad debe ser mayor a 0' });
-    }
-    
-    const fechaHora = req.body.fechaHora ? new Date(req.body.fechaHora) : new Date();
 
-    // Validar fecha
-    if (isNaN(fechaHora.getTime())) {
-      return res.status(400).json({ message: 'Fecha inválida' });
+    const { cantidad, fechaHora, costoUnitario, acarreo, flete } = req.body;
+    
+    if (!cantidad || cantidad <= 0) {
+      return res.status(400).json({ message: 'La cantidad debe ser mayor a 0' });
     }
 
     // Guardar valores anteriores para el historial
-    const stockAnterior = producto.stock;
-    const cantidadAnterior = producto.cantidad;
+    const stockAnterior = producto.stock || 0;
+    const cantidadAnterior = producto.cantidad || 0;
     
     // Actualizar tanto stock como cantidad
-    producto.stock += cantidad;
-    producto.cantidad += cantidad;
+    producto.stock = (producto.stock || 0) + cantidad;
+    producto.cantidad = (producto.cantidad || 0) + cantidad;
     
     // Calcular el costo final de la entrada
-    const costoInicial = req.body.costoUnitario || producto.costoInicial;
-    const acarreo = req.body.acarreo || 0;
-    const flete = req.body.flete || 0;
-    const costoFinalEntrada = ((costoInicial * cantidad) + acarreo + flete) / cantidad;
+    const costoFinalEntrada = ((costoUnitario * cantidad) + acarreo + flete) / cantidad;
     
     // Guardar los cambios
     await producto.save();
     
-    // Registrar en el historial con stockLote correcto
+    // Registrar en el historial
     await Historial.create({
       producto: producto._id,
       nombreProducto: producto.nombre,
@@ -366,14 +357,17 @@ router.post('/:id/entradas', async (req, res) => {
       stockAnterior: stockAnterior,
       stockNuevo: producto.stock,
       fecha: fechaHora,
-      stockLote: cantidad, // Establecer stockLote igual a la cantidad ingresada
+      stockLote: cantidad,
       costoFinal: costoFinalEntrada
     });
     
     res.json(producto);
   } catch (error) {
     console.error('Error en entrada de stock:', error);
-    res.status(500).json({ message: 'Error en entrada de stock', error: error.message });
+    res.status(500).json({ 
+      message: 'Error en entrada de stock', 
+      error: error.message 
+    });
   }
 });
 
