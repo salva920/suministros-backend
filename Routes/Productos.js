@@ -315,7 +315,7 @@ router.post('/:id/entradas', async (req, res) => {
     
     // Actualizar tanto stock como cantidad
     producto.stock += cantidad;
-    producto.cantidad += cantidad; // Actualizar también la cantidad total
+    producto.cantidad += cantidad;
     
     // Calcular el costo final de la entrada
     const costoInicial = req.body.costoUnitario || producto.costoInicial;
@@ -326,7 +326,7 @@ router.post('/:id/entradas', async (req, res) => {
     // Guardar los cambios
     await producto.save();
     
-    // Registrar en el historial
+    // Registrar en el historial con stockLote correcto
     await Historial.create({
       producto: producto._id,
       nombreProducto: producto.nombre,
@@ -336,7 +336,7 @@ router.post('/:id/entradas', async (req, res) => {
       stockAnterior: stockAnterior,
       stockNuevo: producto.stock,
       fecha: fechaHora,
-      stockLote: cantidad,
+      stockLote: cantidad, // Establecer stockLote igual a la cantidad ingresada
       costoFinal: costoFinalEntrada
     });
     
@@ -349,12 +349,41 @@ router.post('/:id/entradas', async (req, res) => {
 
 // GET /:id/lotes
 router.get('/:id/lotes', async (req, res) => {
-  const lotes = await Historial.find({
-    producto: req.params.id,
-    operacion: { $in: ['creacion', 'entrada'] },
-    stockLote: { $gt: 0 }
-  }).sort({ fecha: 1 }); // FIFO
-  res.json(lotes);
+  try {
+    const producto = await Producto.findById(req.params.id);
+    
+    if (!producto) {
+      return res.status(404).json({ message: 'Producto no encontrado' });
+    }
+
+    const lotes = await Historial.find({
+      producto: req.params.id,
+      operacion: { $in: ['creacion', 'entrada'] },
+      stockLote: { $gt: 0 }
+    }).sort({ fecha: 1 });
+
+    // Si no hay lotes pero el producto tiene stock, crear un lote virtual
+    if (lotes.length === 0 && producto.stock > 0) {
+      lotes.push({
+        _id: new mongoose.Types.ObjectId(),
+        producto: producto._id,
+        nombreProducto: producto.nombre,
+        codigoProducto: producto.codigo,
+        operacion: 'entrada',
+        cantidad: producto.stock,
+        stockAnterior: 0,
+        stockNuevo: producto.stock,
+        fecha: new Date(),
+        stockLote: producto.stock,
+        costoFinal: producto.costoFinal
+      });
+    }
+
+    res.json(lotes);
+  } catch (error) {
+    console.error('Error al obtener lotes:', error);
+    res.status(500).json({ message: 'Error al obtener los lotes del producto' });
+  }
 });
 
 module.exports = router;
