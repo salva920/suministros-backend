@@ -315,7 +315,7 @@ router.post('/:id/entradas', async (req, res) => {
     
     // Actualizar tanto stock como cantidad
     producto.stock += cantidad;
-    producto.cantidad += cantidad; // Actualizar también la cantidad total
+    producto.cantidad += cantidad;
     
     // Calcular el costo final de la entrada
     const costoInicial = req.body.costoUnitario || producto.costoInicial;
@@ -343,7 +343,11 @@ router.post('/:id/entradas', async (req, res) => {
     res.json(producto);
   } catch (error) {
     console.error('Error en entrada de stock:', error);
-    res.status(500).json({ message: 'Error en entrada de stock', error: error.message });
+    res.status(500).json({ 
+      message: 'Error en entrada de stock', 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
