@@ -285,6 +285,14 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
+    // Verificar si el producto tiene stock
+    if (productoEliminado.stock > 0) {
+      await session.abortTransaction();
+      return res.status(400).json({ 
+        message: 'No se puede eliminar un producto con stock disponible' 
+      });
+    }
+
     // Registrar eliminación en el historial antes de eliminar el producto
     await Historial.create([{
       producto: productoEliminado._id,
