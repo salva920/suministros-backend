@@ -266,24 +266,54 @@ router.put('/:id', async (req, res) => {
 
 // Eliminar un producto
 router.delete('/:id', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
-    const productoEliminado = await Producto.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
+
+    // Validación del ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'ID inválido' });
+    }
+
+    // Obtener el producto antes de eliminarlo
+    const productoEliminado = await Producto.findById(id).session(session);
+    
     if (!productoEliminado) {
+      await session.abortTransaction();
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
-    
-    // Registrar eliminación
-    await Historial.create({
+
+    // Registrar eliminación en el historial antes de eliminar el producto
+    await Historial.create([{
       producto: productoEliminado._id,
       nombreProducto: productoEliminado.nombre,
       codigoProducto: productoEliminado.codigo,
       operacion: 'eliminacion',
-      fecha: new Date()
+      fecha: new Date(),
+      stockAnterior: productoEliminado.stock,
+      stockNuevo: 0,
+      cantidad: productoEliminado.cantidad
+    }], { session });
+
+    // Eliminar el producto
+    await Producto.findByIdAndDelete(id).session(session);
+
+    await session.commitTransaction();
+    res.json({ 
+      message: 'Producto eliminado correctamente',
+      producto: productoEliminado
     });
-    
-    res.json({ message: 'Producto eliminado correctamente' });
   } catch (error) {
-    handleErrors(res, error);
+    await session.abortTransaction();
+    console.error('Error al eliminar el producto:', error);
+    res.status(500).json({ 
+      message: 'Error al eliminar el producto',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    session.endSession();
   }
 });
 
