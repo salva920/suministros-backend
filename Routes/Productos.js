@@ -266,9 +266,6 @@ router.put('/:id', async (req, res) => {
 
 // Eliminar un producto
 router.delete('/:id', async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  
   try {
     const { id } = req.params;
 
@@ -278,23 +275,21 @@ router.delete('/:id', async (req, res) => {
     }
 
     // Obtener el producto antes de eliminarlo
-    const productoEliminado = await Producto.findById(id).session(session);
+    const productoEliminado = await Producto.findById(id);
     
     if (!productoEliminado) {
-      await session.abortTransaction();
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
     // Verificar si el producto tiene stock
     if (productoEliminado.stock > 0) {
-      await session.abortTransaction();
       return res.status(400).json({ 
         message: 'No se puede eliminar un producto con stock disponible' 
       });
     }
 
-    // Registrar eliminación en el historial antes de eliminar el producto
-    await Historial.create([{
+    // Registrar eliminación en el historial
+    await Historial.create({
       producto: productoEliminado._id,
       nombreProducto: productoEliminado.nombre,
       codigoProducto: productoEliminado.codigo,
@@ -303,25 +298,21 @@ router.delete('/:id', async (req, res) => {
       stockAnterior: productoEliminado.stock,
       stockNuevo: 0,
       cantidad: productoEliminado.cantidad
-    }], { session });
+    });
 
     // Eliminar el producto
-    await Producto.findByIdAndDelete(id).session(session);
+    await Producto.findByIdAndDelete(id);
 
-    await session.commitTransaction();
     res.json({ 
       message: 'Producto eliminado correctamente',
       producto: productoEliminado
     });
   } catch (error) {
-    await session.abortTransaction();
     console.error('Error al eliminar el producto:', error);
     res.status(500).json({ 
       message: 'Error al eliminar el producto',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
-  } finally {
-    session.endSession();
   }
 });
 
