@@ -304,12 +304,14 @@ router.get('/', async (req, res) => {
       sort: { [sort]: order === 'asc' ? 1 : -1 },
       populate: [
         { 
-          path: 'cliente', 
-          select: 'nombre rif telefono email direccion municipio'
+          path: 'cliente',
+          select: '_id nombre rif telefono',
+          options: { strictPopulate: false }
         },
         { 
           path: 'productos.producto',
-          select: 'nombre costoFinal'
+          select: 'nombre costoFinal',
+          options: { strictPopulate: false }
         }
       ]
     };
