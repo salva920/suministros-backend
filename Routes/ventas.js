@@ -102,8 +102,8 @@ router.post('/', async (req, res) => {
     };
 
     // Verificar que el total coincida con la suma de los productos
-    const totalCalculado = ventaData.productos.reduce((sum, p) => 
-      sum + (p.precioUnitario * p.cantidad), 0);
+    const totalCalculado = parseFloat(ventaData.productos.reduce((sum, p) => 
+      sum + (p.precioUnitario * p.cantidad), 0).toFixed(2));
 
     console.log('Datos de la venta a crear:', {
       ...ventaData,
@@ -123,11 +123,11 @@ router.post('/', async (req, res) => {
     }
 
     // Verificar que las ganancias coincidan con la diferencia entre el total y el costo total
-    const gananciaTotalCalculada = ventaData.productos.reduce((sum, p) => 
-      sum + p.gananciaTotal, 0);
+    const gananciaTotalCalculada = parseFloat(ventaData.productos.reduce((sum, p) => 
+      sum + p.gananciaTotal, 0).toFixed(2));
     
-    const costoTotal = ventaData.productos.reduce((sum, p) => 
-      sum + (p.costoInicial * p.cantidad), 0);
+    const costoTotal = parseFloat(ventaData.productos.reduce((sum, p) => 
+      sum + (p.costoInicial * p.cantidad), 0).toFixed(2));
 
     const gananciaEsperada = parseFloat((ventaData.total - costoTotal).toFixed(2));
 
@@ -139,7 +139,14 @@ router.post('/', async (req, res) => {
       diferencia: Math.abs(gananciaTotalCalculada - gananciaEsperada)
     });
 
-    if (Math.abs(gananciaTotalCalculada - gananciaEsperada) > 0.01) {
+    // Ajustar las ganancias si hay una pequeña diferencia
+    if (Math.abs(gananciaTotalCalculada - gananciaEsperada) <= 0.01) {
+      // Si la diferencia es pequeña, ajustamos la ganancia del primer producto
+      const diferencia = gananciaEsperada - gananciaTotalCalculada;
+      if (ventaData.productos.length > 0) {
+        ventaData.productos[0].gananciaTotal = parseFloat((ventaData.productos[0].gananciaTotal + diferencia).toFixed(2));
+      }
+    } else {
       return res.status(400).json({ 
         error: 'La suma de ganancias no coincide con la ganancia esperada',
         detalles: {
