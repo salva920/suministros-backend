@@ -129,7 +129,15 @@ router.post('/', async (req, res) => {
     const costoTotal = ventaData.productos.reduce((sum, p) => 
       sum + (p.costoInicial * p.cantidad), 0);
 
-    const gananciaEsperada = ventaData.total - costoTotal;
+    const gananciaEsperada = parseFloat((ventaData.total - costoTotal).toFixed(2));
+
+    console.log('Cálculos de ganancia:', {
+      total: ventaData.total,
+      costoTotal,
+      gananciaEsperada,
+      gananciaTotalCalculada,
+      diferencia: Math.abs(gananciaTotalCalculada - gananciaEsperada)
+    });
 
     if (Math.abs(gananciaTotalCalculada - gananciaEsperada) > 0.01) {
       return res.status(400).json({ 
