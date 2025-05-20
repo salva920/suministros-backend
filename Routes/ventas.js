@@ -22,142 +22,25 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Debe especificar un cliente' });
     }
 
-    // Validar montos y números
-    const total = parseFloat(req.body.total);
-    const montoAbonado = parseFloat(req.body.montoAbonado || 0);
-    const saldoPendiente = parseFloat(req.body.saldoPendiente || 0);
-
-    if (isNaN(total) || total < 0) {
-      return res.status(400).json({ error: 'Total inválido' });
-    }
-
-    if (isNaN(montoAbonado) || montoAbonado < 0) {
-      return res.status(400).json({ error: 'Monto abonado inválido' });
-    }
-
-    // Validar que los montos coincidan
-    const diferencia = Math.abs(total - montoAbonado - saldoPendiente);
-    if (diferencia > 0.01) {
-      return res.status(400).json({ 
-        error: 'El saldo pendiente no coincide con el total y monto abonado',
-        detalles: {
-          total,
-          montoAbonado,
-          saldoPendiente,
-          diferencia
-        }
-      });
-    }
-
     // Verificar que todos los IDs de producto sean válidos
     for (const item of req.body.productos) {
       if (!mongoose.Types.ObjectId.isValid(item.producto)) {
         return res.status(400).json({ error: `ID de producto inválido: ${item.producto}` });
       }
-
-      // Validar montos del producto
-      if (isNaN(item.cantidad) || item.cantidad <= 0) {
-        return res.status(400).json({ error: `Cantidad inválida para el producto: ${item.producto}` });
-      }
-      if (isNaN(item.precioUnitario) || item.precioUnitario < 0) {
-        return res.status(400).json({ error: `Precio unitario inválido para el producto: ${item.producto}` });
-      }
-      if (isNaN(item.gananciaUnitaria) || item.gananciaUnitaria < 0) {
-        return res.status(400).json({ error: `Ganancia unitaria inválida para el producto: ${item.producto}` });
-      }
-      if (isNaN(item.gananciaTotal) || item.gananciaTotal < 0) {
-        return res.status(400).json({ error: `Ganancia total inválida para el producto: ${item.producto}` });
-      }
     }
 
-    // Crear la venta con datos formateados
+    // Crear la venta
     const ventaData = {
-      fecha: new Date(req.body.fecha),
-      cliente: req.body.cliente,
-      productos: req.body.productos.map(p => {
-        const precioUnitario = parseFloat(p.precioUnitario);
-        const costoInicial = parseFloat(p.costoInicial);
-        const cantidad = parseFloat(p.cantidad);
-        const gananciaUnitaria = parseFloat((precioUnitario - costoInicial).toFixed(2));
-        const gananciaTotal = parseFloat((gananciaUnitaria * cantidad).toFixed(2));
-        
-        return {
-          producto: p.producto,
-          cantidad,
-          precioUnitario,
-          costoInicial,
-          gananciaUnitaria,
-          gananciaTotal
-        };
-      }),
-      total: parseFloat(req.body.total),
-      tipoPago: req.body.tipoPago,
-      metodoPago: req.body.metodoPago,
-      nrFactura: req.body.nrFactura,
-      banco: req.body.metodoPago !== 'efectivo' ? req.body.banco : undefined,
-      montoAbonado: montoAbonado,
-      saldoPendiente: saldoPendiente,
-      estado: 'activa',
-      estadoCredito: saldoPendiente > 0 ? 'vigente' : 'pagado'
+      ...req.body,
+      cliente: req.body.cliente.id || req.body.cliente,
+      productos: req.body.productos.map(p => ({
+        producto: p.producto.id || p.producto,
+        cantidad: p.cantidad,
+        precioUnitario: parseFloat(p.precioUnitario),
+        gananciaUnitaria: parseFloat(p.gananciaUnitaria),
+        gananciaTotal: parseFloat(p.gananciaTotal)
+      }))
     };
-
-    // Verificar que el total coincida con la suma de los productos
-    const totalCalculado = parseFloat(ventaData.productos.reduce((sum, p) => 
-      sum + (p.precioUnitario * p.cantidad), 0).toFixed(2));
-
-    console.log('Datos de la venta a crear:', {
-      ...ventaData,
-      totalCalculado,
-      diferencia: Math.abs(totalCalculado - ventaData.total)
-    });
-
-    if (Math.abs(totalCalculado - ventaData.total) > 0.01) {
-      return res.status(400).json({ 
-        error: 'El total no coincide con la suma de los productos',
-        detalles: {
-          total: ventaData.total,
-          totalCalculado,
-          diferencia: Math.abs(totalCalculado - ventaData.total)
-        }
-      });
-    }
-
-    // Verificar que las ganancias coincidan con la diferencia entre el total y el costo total
-    const gananciaTotalCalculada = parseFloat(ventaData.productos.reduce((sum, p) => 
-      sum + p.gananciaTotal, 0).toFixed(2));
-    
-    const costoTotal = parseFloat(ventaData.productos.reduce((sum, p) => 
-      sum + (p.costoInicial * p.cantidad), 0).toFixed(2));
-
-    const gananciaEsperada = parseFloat((ventaData.total - costoTotal).toFixed(2));
-
-    console.log('Cálculos de ganancia:', {
-      total: ventaData.total,
-      costoTotal,
-      gananciaEsperada,
-      gananciaTotalCalculada,
-      diferencia: Math.abs(gananciaTotalCalculada - gananciaEsperada)
-    });
-
-    // Ajustar las ganancias si hay una pequeña diferencia
-    if (Math.abs(gananciaTotalCalculada - gananciaEsperada) <= 0.01) {
-      // Si la diferencia es pequeña, ajustamos la ganancia del primer producto
-      const diferencia = gananciaEsperada - gananciaTotalCalculada;
-      if (ventaData.productos.length > 0) {
-        ventaData.productos[0].gananciaTotal = parseFloat((ventaData.productos[0].gananciaTotal + diferencia).toFixed(2));
-      }
-    } else {
-      return res.status(400).json({ 
-        error: 'La suma de ganancias no coincide con la ganancia esperada',
-        detalles: {
-          total: ventaData.total,
-          costoTotal,
-          gananciaEsperada,
-          gananciaTotalCalculada,
-          diferencia: Math.abs(gananciaTotalCalculada - gananciaEsperada)
-        }
-      });
-    }
 
     const venta = new Venta(ventaData);
     await venta.save({ session });
@@ -208,8 +91,8 @@ router.post('/', async (req, res) => {
         cantidadRestante -= cantidadDeEsteLote;
       }
 
-      // Actualizar el stock del producto basado en los lotes restantes
-      const stockActualizado = await Historial.aggregate([
+      // Calcular y actualizar el stock total del producto basado en los lotes
+      const stockActual = await Historial.aggregate([
         { 
           $match: { 
             producto: producto._id,
@@ -219,8 +102,7 @@ router.post('/', async (req, res) => {
         { $group: { _id: null, total: { $sum: "$stockLote" } } }
       ]).session(session);
 
-      // Actualizar el stock del producto con el total de los lotes
-      producto.stock = stockActualizado[0]?.total || 0;
+      producto.stock = stockActual[0]?.total || 0;
       await producto.save({ session });
     }
 
@@ -238,196 +120,122 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Anular una venta (PUT /api/ventas/:id/anular)
-router.put('/:id/anular', async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    const venta = await Venta.findById(req.params.id).session(session);
-    if (!venta) {
-      return res.status(404).json({ error: 'Venta no encontrada' });
-    }
-
-    if (venta.estado === 'anulada') {
-      return res.status(400).json({ error: 'La venta ya está anulada' });
-    }
-
-    // Devolver stock a los lotes
-    for (const item of venta.productos) {
-      const producto = await Producto.findById(item.producto).session(session);
-      if (!producto) continue;
-
-      // Buscar el lote más reciente para devolver el stock
-      const lote = await Historial.findOne({
-        producto: producto._id,
-        operacion: { $in: ['creacion', 'entrada'] }
-      }).sort({ fecha: -1 }).session(session);
-
-      if (lote) {
-        lote.stockLote += item.cantidad;
-        await lote.save({ session });
-      }
-
-      // Registrar la devolución en el historial
-      const historialDevolucion = new Historial({
-        producto: producto._id,
-        nombreProducto: producto.nombre,
-        codigoProducto: producto.codigo,
-        operacion: 'entrada',
-        cantidad: item.cantidad,
-        stockAnterior: producto.stock,
-        stockNuevo: producto.stock + item.cantidad,
-        fecha: new Date(),
-        detalles: `Devolución por anulación de venta #${venta._id}`
-      });
-      await historialDevolucion.save({ session });
-
-      // Actualizar stock del producto
-      producto.stock += item.cantidad;
-      await producto.save({ session });
-    }
-
-    // Marcar la venta como anulada
-    venta.estado = 'anulada';
-    await venta.save({ session });
-
-    await session.commitTransaction();
-    res.json({ message: 'Venta anulada correctamente', venta });
-  } catch (error) {
-    await session.abortTransaction();
-    console.error('Error al anular la venta:', error);
-    res.status(500).json({ 
-      error: 'Error al anular la venta',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  } finally {
-    session.endSession();
-  }
-});
-
 // Obtener todas las ventas (GET /api/ventas)
 router.get('/', async (req, res) => {
+  // Agregar validación de parámetro limit
+  if (req.query.limit && isNaN(parseInt(req.query.limit))) {
+    return res.status(400).json({ error: 'Parámetro limit inválido' });
+  }
+  
+  // Forzar mínimo 1 y máximo 1000 documentos
+  const limit = Math.min(Math.max(parseInt(req.query.limit || 10), 1), 1000);
+
+  const { 
+    page = 1, 
+    sort = 'fecha', 
+    order = 'desc',
+    cliente,
+    saldoPendiente,
+    fechaInicio,
+    fechaFin
+  } = req.query;
+
+  // Validación de ID
+  if (cliente && !mongoose.Types.ObjectId.isValid(cliente)) {
+    return res.status(400).json({ 
+      success: false,
+      error: "ID de cliente inválido" 
+    });
+  }
+
+  // Construir query de filtrado
+  const query = {};
+
+  // Validar ID de cliente
+  if (cliente) {
+    query.cliente = new mongoose.Types.ObjectId(cliente);
+  }
+
+  // Cambiar la condición del filtro saldoPendiente
+  if (saldoPendiente === 'true') { 
+    query.saldoPendiente = { $gt: 0 }; // Solo mostrar ventas con saldo pendiente
+  } else if (saldoPendiente === 'false') {
+    query.saldoPendiente = { $lte: 0 }; // Mostrar ventas sin saldo pendiente
+  } // Si saldoPendiente no está definido, no se aplica filtro
+
+  // Filtro por fechas
+  if (fechaInicio || fechaFin) {
+    query.fecha = {};
+    if (fechaInicio) query.fecha.$gte = new Date(fechaInicio);
+    if (fechaFin) query.fecha.$lte = new Date(fechaFin);
+  }
+
+  const options = {
+    page: parseInt(page),
+    limit: limit, // Usar el límite validado
+    sort: { [sort]: order === 'asc' ? 1 : -1 },
+    populate: [
+      { 
+        path: 'cliente', 
+        select: 'nombre rif telefono email direccion municipio',
+        transform: (doc) => doc ? { 
+          id: doc._id.toString(), 
+          ...doc.toObject() 
+        } : null 
+      },
+      { 
+        path: 'productos.producto',
+        select: 'nombre costoFinal', 
+        transform: (doc) => doc ? { 
+          id: doc._id.toString(), 
+          nombre: doc.nombre,
+          costoFinal: doc.costoFinal 
+        } : null
+      }
+    ],
+    select: '-__v'
+  };
+
   try {
-    const { 
-      page = 1, 
-      limit = 10,
-      sort = 'fecha',
-      order = 'desc',
-      cliente,
-      estado,
-      estadoCredito,
-      tipoPago,
-      fechaInicio,
-      fechaFin,
-      saldoPendiente
-    } = req.query;
-
-    // Validar parámetros
-    if (limit && (isNaN(limit) || limit < 1 || limit > 100)) {
-      return res.status(400).json({ error: 'Límite inválido' });
-    }
-
-    if (cliente && !mongoose.Types.ObjectId.isValid(cliente)) {
-      return res.status(400).json({ error: 'ID de cliente inválido' });
-    }
-
-    // Construir query
-    const query = {};
-
-    if (cliente) query.cliente = cliente;
-    if (estado) query.estado = estado;
-    if (estadoCredito) query.estadoCredito = estadoCredito;
-    if (tipoPago) query.tipoPago = tipoPago;
-    if (saldoPendiente === 'true') query.saldoPendiente = { $gt: 0 };
-    if (saldoPendiente === 'false') query.saldoPendiente = { $lte: 0 };
-
-    // Validar y agregar filtros de fecha
-    if (fechaInicio || fechaFin) {
-      query.fecha = {};
-      if (fechaInicio) {
-        const start = new Date(fechaInicio);
-        if (isNaN(start.getTime())) {
-          return res.status(400).json({ error: 'Fecha de inicio inválida' });
-        }
-        query.fecha.$gte = start;
-      }
-      if (fechaFin) {
-        const end = new Date(fechaFin);
-        if (isNaN(end.getTime())) {
-          return res.status(400).json({ error: 'Fecha de fin inválida' });
-        }
-        query.fecha.$lte = end;
-      }
-    }
-
-    const options = {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: { [sort]: order === 'asc' ? 1 : -1 },
-      populate: [
-        { 
-          path: 'cliente', 
-          select: 'nombre rif telefono email direccion municipio'
-        },
-        { 
-          path: 'productos.producto',
-          select: 'nombre costoFinal'
-        }
-      ]
-    };
-
     const result = await Venta.paginate(query, options);
 
-    // Calcular totales
-    const totales = await Venta.aggregate([
+    // Calcular total de deudas
+    const totalDeudas = await Venta.aggregate([
       { $match: query },
-      { 
-        $group: { 
-          _id: null,
-          totalVentas: { $sum: "$total" },
-          totalSaldoPendiente: { $sum: "$saldoPendiente" }
-        } 
-      }
+      { $group: { _id: null, total: { $sum: "$saldoPendiente" } } }
     ]);
 
-    res.json({
+    res.status(200).json({
       ventas: result.docs,
       total: result.totalDocs,
+      limit: result.limit,
+      page: result.page,
       pages: result.totalPages,
-      currentPage: result.page,
-      totales: totales[0] || { totalVentas: 0, totalSaldoPendiente: 0 }
+      totalDeudas: totalDeudas[0]?.total || 0
     });
   } catch (error) {
-    console.error('Error al obtener ventas:', error);
-    res.status(500).json({ 
-      error: 'Error al obtener ventas',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('Error al obtener las ventas:', error);
+    res.status(500).json({ error: 'Error al obtener las ventas' });
   }
 });
 
 // Obtener una venta por ID (GET /api/ventas/:id)
 router.get('/:id', async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: 'ID de venta inválido' });
-    }
-
     const venta = await Venta.findById(req.params.id)
       .populate('cliente')
       .populate('productos.producto');
 
     if (!venta) {
-      return res.status(404).json({ error: 'Venta no encontrada' });
+      return res.status(404).json({ message: 'Venta no encontrada' });
     }
 
     res.json(venta);
   } catch (error) {
     console.error('Error al obtener la venta:', error);
     res.status(500).json({ 
-      error: 'Error al obtener la venta',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Error en el servidor',
+      error: process.env.NODE_ENV === 'development' ? error.message : null
     });
   }
 });
