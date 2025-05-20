@@ -310,15 +310,15 @@ router.post('/:id/entradas', async (req, res) => {
     }
 
     // Guardar valores anteriores para el historial
-    const stockAnterior = producto.stock;
-    const cantidadAnterior = producto.cantidad;
+    const stockAnterior = producto.stock || 0;
+    const cantidadAnterior = producto.cantidad || 0;
     
     // Actualizar tanto stock como cantidad
-    producto.stock += cantidad;
-    producto.cantidad += cantidad;
+    producto.stock = (producto.stock || 0) + cantidad;
+    producto.cantidad = (producto.cantidad || 0) + cantidad;
     
     // Calcular el costo final de la entrada
-    const costoInicial = req.body.costoUnitario || producto.costoInicial;
+    const costoInicial = req.body.costoUnitario || producto.costoInicial || 0;
     const acarreo = req.body.acarreo || 0;
     const flete = req.body.flete || 0;
     const costoFinalEntrada = ((costoInicial * cantidad) + acarreo + flete) / cantidad;
@@ -327,7 +327,7 @@ router.post('/:id/entradas', async (req, res) => {
     await producto.save();
     
     // Registrar en el historial
-    await Historial.create({
+    const historialEntry = await Historial.create({
       producto: producto._id,
       nombreProducto: producto.nombre,
       codigoProducto: producto.codigo,
@@ -339,8 +339,16 @@ router.post('/:id/entradas', async (req, res) => {
       stockLote: cantidad,
       costoFinal: costoFinalEntrada
     });
+
+    // Verificar que el historial se creó correctamente
+    if (!historialEntry) {
+      throw new Error('Error al crear el registro en el historial');
+    }
     
-    res.json(producto);
+    res.json({
+      producto: producto,
+      historial: historialEntry
+    });
   } catch (error) {
     console.error('Error en entrada de stock:', error);
     res.status(500).json({ 
