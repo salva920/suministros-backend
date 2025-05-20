@@ -122,17 +122,24 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Verificar que las ganancias coincidan con el total
+    // Verificar que las ganancias coincidan con la diferencia entre el total y el costo total
     const gananciaTotalCalculada = ventaData.productos.reduce((sum, p) => 
       sum + p.gananciaTotal, 0);
+    
+    const costoTotal = ventaData.productos.reduce((sum, p) => 
+      sum + (p.costoInicial * p.cantidad), 0);
 
-    if (Math.abs(gananciaTotalCalculada - ventaData.total) > 0.01) {
+    const gananciaEsperada = ventaData.total - costoTotal;
+
+    if (Math.abs(gananciaTotalCalculada - gananciaEsperada) > 0.01) {
       return res.status(400).json({ 
-        error: 'La suma de ganancias no coincide con el total',
+        error: 'La suma de ganancias no coincide con la ganancia esperada',
         detalles: {
           total: ventaData.total,
+          costoTotal,
+          gananciaEsperada,
           gananciaTotalCalculada,
-          diferencia: Math.abs(gananciaTotalCalculada - ventaData.total)
+          diferencia: Math.abs(gananciaTotalCalculada - gananciaEsperada)
         }
       });
     }
