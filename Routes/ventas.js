@@ -101,19 +101,15 @@ router.post('/', async (req, res) => {
       estadoCredito: saldoPendiente > 0 ? 'vigente' : 'pagado'
     };
 
-    // Verificar que la suma de ganancias coincida con el total
-    const gananciaTotalCalculada = ventaData.productos.reduce((sum, p) => 
-      sum + p.gananciaTotal, 0);
-    
-    console.log('Datos de la venta a crear:', {
-      ...ventaData,
-      gananciaTotalCalculada,
-      diferencia: Math.abs(gananciaTotalCalculada - ventaData.total)
-    });
-
-    // Verificar que el total coincida con la suma de (precioUnitario * cantidad)
+    // Verificar que el total coincida con la suma de los productos
     const totalCalculado = ventaData.productos.reduce((sum, p) => 
       sum + (p.precioUnitario * p.cantidad), 0);
+
+    console.log('Datos de la venta a crear:', {
+      ...ventaData,
+      totalCalculado,
+      diferencia: Math.abs(totalCalculado - ventaData.total)
+    });
 
     if (Math.abs(totalCalculado - ventaData.total) > 0.01) {
       return res.status(400).json({ 
@@ -122,6 +118,21 @@ router.post('/', async (req, res) => {
           total: ventaData.total,
           totalCalculado,
           diferencia: Math.abs(totalCalculado - ventaData.total)
+        }
+      });
+    }
+
+    // Verificar que las ganancias coincidan con el total
+    const gananciaTotalCalculada = ventaData.productos.reduce((sum, p) => 
+      sum + p.gananciaTotal, 0);
+
+    if (Math.abs(gananciaTotalCalculada - ventaData.total) > 0.01) {
+      return res.status(400).json({ 
+        error: 'La suma de ganancias no coincide con el total',
+        detalles: {
+          total: ventaData.total,
+          gananciaTotalCalculada,
+          diferencia: Math.abs(gananciaTotalCalculada - ventaData.total)
         }
       });
     }
