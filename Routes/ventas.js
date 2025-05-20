@@ -23,12 +23,30 @@ router.post('/', async (req, res) => {
     }
 
     // Validar montos y números
-    if (req.body.total && (isNaN(req.body.total) || req.body.total < 0)) {
+    const total = parseFloat(req.body.total);
+    const montoAbonado = parseFloat(req.body.montoAbonado || 0);
+    const saldoPendiente = parseFloat(req.body.saldoPendiente || 0);
+
+    if (isNaN(total) || total < 0) {
       return res.status(400).json({ error: 'Total inválido' });
     }
 
-    if (req.body.montoAbonado && (isNaN(req.body.montoAbonado) || req.body.montoAbonado < 0)) {
+    if (isNaN(montoAbonado) || montoAbonado < 0) {
       return res.status(400).json({ error: 'Monto abonado inválido' });
+    }
+
+    // Validar que los montos coincidan
+    const diferencia = Math.abs(total - montoAbonado - saldoPendiente);
+    if (diferencia > 0.01) {
+      return res.status(400).json({ 
+        error: 'El saldo pendiente no coincide con el total y monto abonado',
+        detalles: {
+          total,
+          montoAbonado,
+          saldoPendiente,
+          diferencia
+        }
+      });
     }
 
     // Verificar que todos los IDs de producto sean válidos
@@ -52,20 +70,26 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Crear la venta
+    // Crear la venta con datos formateados
     const ventaData = {
-      ...req.body,
-      cliente: req.body.cliente.id || req.body.cliente,
+      fecha: new Date(req.body.fecha),
+      cliente: req.body.cliente,
       productos: req.body.productos.map(p => ({
-        producto: p.producto.id || p.producto,
+        producto: p.producto,
         cantidad: parseFloat(p.cantidad),
         precioUnitario: parseFloat(p.precioUnitario),
+        costoInicial: parseFloat(p.costoInicial),
         gananciaUnitaria: parseFloat(p.gananciaUnitaria),
         gananciaTotal: parseFloat(p.gananciaTotal)
       })),
-      total: parseFloat(req.body.total),
-      montoAbonado: parseFloat(req.body.montoAbonado || 0),
-      saldoPendiente: parseFloat(req.body.saldoPendiente || req.body.total)
+      total: total,
+      tipoPago: req.body.tipoPago,
+      metodoPago: req.body.metodoPago,
+      nrFactura: req.body.nrFactura,
+      banco: req.body.metodoPago !== 'efectivo' ? req.body.banco : undefined,
+      montoAbonado: montoAbonado,
+      saldoPendiente: saldoPendiente,
+      estado: 'completada'
     };
 
     const venta = new Venta(ventaData);
