@@ -89,7 +89,7 @@ router.post('/', async (req, res) => {
       banco: req.body.metodoPago !== 'efectivo' ? req.body.banco : undefined,
       montoAbonado: montoAbonado,
       saldoPendiente: saldoPendiente,
-      estado: 'completada'
+      estado: 'activa'
     };
 
     const venta = new Venta(ventaData);
