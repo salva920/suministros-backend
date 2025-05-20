@@ -384,27 +384,41 @@ router.post('/:id/entradas', async (req, res) => {
 // GET /:id/lotes
 router.get('/:id/lotes', async (req, res) => {
   try {
+    const productoId = req.params.id;
+
     // Validar que el ID sea un ObjectId válido
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (!mongoose.Types.ObjectId.isValid(productoId)) {
       return res.status(400).json({ 
         message: 'ID de producto inválido',
-        error: 'INVALID_ID'
+        error: 'INVALID_ID',
+        lotes: [],
+        totales: {
+          stockTotal: 0,
+          costoPromedio: 0,
+          cantidadLotes: 0
+        }
       });
     }
 
     // Verificar que el producto existe
-    const producto = await Producto.findById(req.params.id);
+    const producto = await Producto.findById(productoId);
     if (!producto) {
       return res.status(404).json({ 
         message: 'Producto no encontrado',
-        error: 'PRODUCT_NOT_FOUND'
+        error: 'PRODUCT_NOT_FOUND',
+        lotes: [],
+        totales: {
+          stockTotal: 0,
+          costoPromedio: 0,
+          cantidadLotes: 0
+        }
       });
     }
 
     const lotes = await Historial.aggregate([
       {
         $match: {
-          producto: mongoose.Types.ObjectId(req.params.id),
+          producto: new mongoose.Types.ObjectId(productoId),
           operacion: { $in: ['creacion', 'entrada'] },
           stockLote: { $gt: 0 }
         }
@@ -434,42 +448,55 @@ router.get('/:id/lotes', async (req, res) => {
         }
       },
       { $sort: { fecha: 1 } }
-    ]);
+    ]).exec();
 
-    // Verificar si hay lotes disponibles
-    if (!lotes || lotes.length === 0) {
-      return res.status(404).json({
-        message: 'No hay lotes disponibles para este producto',
-        error: 'NO_LOTS_AVAILABLE',
-        producto: {
-          id: producto._id,
-          nombre: producto.nombre,
-          stock: producto.stock
-        }
-      });
-    }
+    // Asegurar que lotes sea un array
+    const lotesArray = Array.isArray(lotes) ? lotes : [];
     
     // Calcular totales
-    const totales = lotes.reduce((acc, lote) => ({
-      stockTotal: acc.stockTotal + lote.stockLote,
-      costoPromedio: acc.costoPromedio + lote.costoFinal
+    const totales = lotesArray.reduce((acc, lote) => ({
+      stockTotal: acc.stockTotal + (lote.stockLote || 0),
+      costoPromedio: acc.costoPromedio + (lote.costoFinal || 0)
     }), { stockTotal: 0, costoPromedio: 0 });
 
-    totales.costoPromedio = totales.costoPromedio / lotes.length;
+    totales.costoPromedio = lotesArray.length > 0 ? totales.costoPromedio / lotesArray.length : 0;
     
-    res.json({
-      lotes,
+    const response = {
+      lotes: lotesArray,
       totales: {
         stockTotal: totales.stockTotal,
         costoPromedio: Math.round(totales.costoPromedio * 100) / 100,
-        cantidadLotes: lotes.length
+        cantidadLotes: lotesArray.length
+      },
+      producto: {
+        id: producto._id,
+        nombre: producto.nombre,
+        stock: producto.stock
       }
-    });
+    };
+
+    // Si no hay lotes, enviar respuesta con array vacío pero no como error
+    if (lotesArray.length === 0) {
+      return res.json({
+        ...response,
+        message: 'No hay lotes disponibles para este producto',
+        error: 'NO_LOTS_AVAILABLE'
+      });
+    }
+    
+    res.json(response);
   } catch (error) {
     console.error('Error al obtener lotes:', error);
     res.status(500).json({ 
       message: 'Error al obtener lotes',
-      error: error.message
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      lotes: [],
+      totales: {
+        stockTotal: 0,
+        costoPromedio: 0,
+        cantidadLotes: 0
+      }
     });
   }
 });
