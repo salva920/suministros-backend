@@ -96,7 +96,7 @@ historialSchema.pre('save', function(next) {
 
 // Índices compuestos para consultas frecuentes
 historialSchema.index({ producto: 1, operacion: 1, stockLote: 1 });
-historialSchema.index({ fecha: -1, operacion: 1 });
+historialSchema.index({ fecha: -1 });
 historialSchema.index({ producto: 1, fecha: -1 });
 
 historialSchema.plugin(mongoosePaginate);

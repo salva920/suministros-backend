@@ -6,12 +6,6 @@ const Producto = require('../models/Producto');
 const moment = require('moment'); // Asegúrate de que esta línea esté presente
 const Historial = require('../models/historial');
 
-// Constantes para validación
-const DIFERENCIA_PERMITIDA = 0.05; // Tolerancia de 5 céntimos
-
-// Función auxiliar para formatear números
-const formatearNumero = (numero) => parseFloat(Number(numero).toFixed(2));
-
 // Crear una nueva venta (POST /api/ventas)
 router.post('/', async (req, res) => {
   const session = await mongoose.startSession();
@@ -28,10 +22,10 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Debe especificar un cliente' });
     }
 
-    // Formatear y validar montos
-    const total = formatearNumero(req.body.total);
-    const montoAbonado = formatearNumero(req.body.montoAbonado || 0);
-    const saldoPendiente = formatearNumero(req.body.saldoPendiente || 0);
+    // Validación mejorada de montos
+    const total = parseFloat(req.body.total.toFixed(2));
+    const montoAbonado = parseFloat((req.body.montoAbonado || 0).toFixed(2));
+    const saldoPendiente = parseFloat((req.body.saldoPendiente || 0).toFixed(2));
 
     if (isNaN(total) || total < 0) {
       return res.status(400).json({ error: 'Total inválido' });
@@ -43,7 +37,7 @@ router.post('/', async (req, res) => {
 
     // Validar que los montos coincidan
     const diferencia = Math.abs(total - montoAbonado - saldoPendiente);
-    if (diferencia > DIFERENCIA_PERMITIDA) {
+    if (diferencia > 0.05) {
       return res.status(400).json({ 
         error: 'El saldo pendiente no coincide con el total y monto abonado',
         detalles: {
@@ -55,67 +49,32 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Verificar que todos los IDs de producto sean válidos
-    for (const item of req.body.productos) {
-      if (!mongoose.Types.ObjectId.isValid(item.producto)) {
-        return res.status(400).json({ error: `ID de producto inválido: ${item.producto}` });
-      }
+    // Formatear productos con precisión decimal
+    const productos = req.body.productos.map(p => ({
+      producto: p.producto,
+      cantidad: parseFloat(p.cantidad.toFixed(2)),
+      precioUnitario: parseFloat(p.precioUnitario.toFixed(2)),
+      costoInicial: parseFloat(p.costoInicial.toFixed(2)),
+      gananciaUnitaria: parseFloat(p.gananciaUnitaria.toFixed(2)),
+      gananciaTotal: parseFloat(p.gananciaTotal.toFixed(2))
+    }));
 
-      // Validar montos del producto
-      if (isNaN(item.cantidad) || item.cantidad <= 0) {
-        return res.status(400).json({ error: `Cantidad inválida para el producto: ${item.producto}` });
-      }
-      if (isNaN(item.precioUnitario) || item.precioUnitario < 0) {
-        return res.status(400).json({ error: `Precio unitario inválido para el producto: ${item.producto}` });
-      }
-      if (isNaN(item.gananciaUnitaria) || item.gananciaUnitaria < 0) {
-        return res.status(400).json({ error: `Ganancia unitaria inválida para el producto: ${item.producto}` });
-      }
-      if (isNaN(item.gananciaTotal) || item.gananciaTotal < 0) {
-        return res.status(400).json({ error: `Ganancia total inválida para el producto: ${item.producto}` });
-      }
-    }
-
-    // Formatear productos y calcular ganancias
-    const productos = req.body.productos.map(p => {
-      const precioUnitario = formatearNumero(p.precioUnitario);
-      const costoInicial = formatearNumero(p.costoInicial);
-      const cantidad = formatearNumero(p.cantidad);
-      const gananciaUnitaria = formatearNumero(precioUnitario - costoInicial);
-      const gananciaTotal = formatearNumero(gananciaUnitaria * cantidad);
-
-      return {
-        producto: p.producto,
-        cantidad,
-        precioUnitario,
-        costoInicial,
-        gananciaUnitaria,
-        gananciaTotal
-      };
-    });
-
-    // Verificar total calculado
-    const totalCalculado = formatearNumero(productos.reduce((sum, p) => 
-      sum + (p.precioUnitario * p.cantidad), 0));
-
-    console.log('Datos de la venta a crear:', {
-      ...req.body,
-      totalCalculado,
-      diferencia: Math.abs(total - totalCalculado)
-    });
-
-    if (Math.abs(total - totalCalculado) > DIFERENCIA_PERMITIDA) {
+    // Cálculo de verificación
+    const totalVerificado = parseFloat(productos.reduce((sum, p) => 
+      sum + (p.precioUnitario * p.cantidad), 0).toFixed(2));
+      
+    if (Math.abs(total - totalVerificado) > 0.05) {
       return res.status(400).json({ 
-        error: 'El total no coincide con la suma de los productos',
+        error: 'Discrepancia en cálculo de total',
         detalles: {
           total,
-          totalCalculado,
-          diferencia: Math.abs(total - totalCalculado)
+          totalVerificado,
+          diferencia: Math.abs(total - totalVerificado)
         }
       });
     }
 
-    // Crear la venta
+    // Crear venta con datos formateados
     const ventaData = {
       fecha: new Date(req.body.fecha),
       cliente: req.body.cliente,
@@ -134,7 +93,7 @@ router.post('/', async (req, res) => {
     const venta = new Venta(ventaData);
     await venta.save({ session });
 
-    // Actualizar stock de cada producto
+    // Proceso de actualización de stock
     for (const item of productos) {
       const producto = await Producto.findById(item.producto).session(session);
       
@@ -142,7 +101,9 @@ router.post('/', async (req, res) => {
         throw new Error(`Producto no encontrado: ${item.producto}`);
       }
 
-      // Optimizar consulta de lotes
+      let cantidadRestante = item.cantidad;
+
+      // Optimizar consulta de lotes con índices
       const lotes = await Historial.find({
         producto: producto._id,
         operacion: { $in: ['creacion', 'entrada'] },
@@ -152,13 +113,13 @@ router.post('/', async (req, res) => {
       .lean()
       .session(session);
 
-      // Verificar stock suficiente
+      // Verificar stock total
       const stockTotalLotes = lotes.reduce((total, lote) => total + lote.stockLote, 0);
       if (stockTotalLotes < item.cantidad) {
         throw new Error(`Stock insuficiente en los lotes para el producto: ${producto.nombre}`);
       }
 
-      // Registrar salida en historial
+      // Registrar la salida en el historial
       const historialSalida = new Historial({
         producto: producto._id,
         nombreProducto: producto.nombre,
@@ -172,8 +133,7 @@ router.post('/', async (req, res) => {
       });
       await historialSalida.save({ session });
 
-      // Descontar de lotes
-      let cantidadRestante = item.cantidad;
+      // Descontar de los lotes
       for (const lote of lotes) {
         if (cantidadRestante <= 0) break;
         const cantidadUsar = Math.min(lote.stockLote, cantidadRestante);

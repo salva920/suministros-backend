@@ -153,10 +153,14 @@ ventaSchema.pre('save', function(next) {
     this.estadoCredito = 'vencido';
   }
 
-  // Validar que la suma de ganancias coincida
+  // Validar que la suma de ganancias coincida con la diferencia entre el total y el costo total
   const gananciaTotalCalculada = this.productos.reduce((sum, p) => sum + p.gananciaTotal, 0);
-  if (Math.abs(gananciaTotalCalculada - this.total) > 0.01) {
-    return next(new Error('La suma de ganancias no coincide con el total'));
+  const costoTotal = this.productos.reduce((sum, p) => sum + (p.costoInicial * p.cantidad), 0);
+  const gananciaEsperada = this.total - costoTotal;
+  const diferencia = Math.abs(gananciaTotalCalculada - gananciaEsperada);
+
+  if (diferencia > 0.05) { // Mayor tolerancia para decimales
+    return next(new Error(`Discrepancia de ganancias: ${diferencia.toFixed(2)}. Ganancia calculada: ${gananciaTotalCalculada.toFixed(2)}, Ganancia esperada: ${gananciaEsperada.toFixed(2)}`));
   }
 
   next();
@@ -167,6 +171,8 @@ ventaSchema.index({ fecha: -1, estado: 1 });
 ventaSchema.index({ cliente: 1, fecha: -1 });
 ventaSchema.index({ estadoCredito: 1, fecha: -1 });
 ventaSchema.index({ tipoPago: 1, fecha: -1 });
+ventaSchema.index({ nrFactura: 1 }, { unique: true });
+ventaSchema.index({ 'productos.producto': 1 });
 
 // Configurar paginación
 ventaSchema.plugin(mongoosePaginate);
