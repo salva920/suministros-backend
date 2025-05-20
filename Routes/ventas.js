@@ -79,18 +79,41 @@ router.post('/', async (req, res) => {
         cantidad: parseFloat(p.cantidad),
         precioUnitario: parseFloat(p.precioUnitario),
         costoInicial: parseFloat(p.costoInicial),
-        gananciaUnitaria: parseFloat(p.gananciaUnitaria),
-        gananciaTotal: parseFloat(p.gananciaTotal)
+        gananciaUnitaria: parseFloat((p.precioUnitario - p.costoInicial).toFixed(2)),
+        gananciaTotal: parseFloat(((p.precioUnitario - p.costoInicial) * p.cantidad).toFixed(2))
       })),
-      total: total,
+      total: parseFloat(req.body.productos.reduce((sum, p) => 
+        sum + (p.precioUnitario * p.cantidad), 0).toFixed(2)),
       tipoPago: req.body.tipoPago,
       metodoPago: req.body.metodoPago,
       nrFactura: req.body.nrFactura,
       banco: req.body.metodoPago !== 'efectivo' ? req.body.banco : undefined,
       montoAbonado: montoAbonado,
       saldoPendiente: saldoPendiente,
-      estado: 'activa'
+      estado: 'activa',
+      estadoCredito: saldoPendiente > 0 ? 'vigente' : 'pagado'
     };
+
+    // Verificar que la suma de ganancias coincida con el total
+    const gananciaTotalCalculada = ventaData.productos.reduce((sum, p) => 
+      sum + p.gananciaTotal, 0);
+    
+    console.log('Datos de la venta a crear:', {
+      ...ventaData,
+      gananciaTotalCalculada,
+      diferencia: Math.abs(gananciaTotalCalculada - ventaData.total)
+    });
+
+    if (Math.abs(gananciaTotalCalculada - ventaData.total) > 0.01) {
+      return res.status(400).json({ 
+        error: 'La suma de ganancias no coincide con el total',
+        detalles: {
+          total: ventaData.total,
+          gananciaTotalCalculada,
+          diferencia: Math.abs(gananciaTotalCalculada - ventaData.total)
+        }
+      });
+    }
 
     const venta = new Venta(ventaData);
     await venta.save({ session });
