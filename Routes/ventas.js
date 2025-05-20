@@ -17,10 +17,38 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Debe incluir al menos un producto' });
     }
 
+    // Validar cliente
+    if (!req.body.cliente) {
+      return res.status(400).json({ error: 'Debe especificar un cliente' });
+    }
+
+    // Validar montos y números
+    if (req.body.total && (isNaN(req.body.total) || req.body.total < 0)) {
+      return res.status(400).json({ error: 'Total inválido' });
+    }
+
+    if (req.body.montoAbonado && (isNaN(req.body.montoAbonado) || req.body.montoAbonado < 0)) {
+      return res.status(400).json({ error: 'Monto abonado inválido' });
+    }
+
     // Verificar que todos los IDs de producto sean válidos
     for (const item of req.body.productos) {
       if (!mongoose.Types.ObjectId.isValid(item.producto)) {
         return res.status(400).json({ error: `ID de producto inválido: ${item.producto}` });
+      }
+
+      // Validar montos del producto
+      if (isNaN(item.cantidad) || item.cantidad <= 0) {
+        return res.status(400).json({ error: `Cantidad inválida para el producto: ${item.producto}` });
+      }
+      if (isNaN(item.precioUnitario) || item.precioUnitario < 0) {
+        return res.status(400).json({ error: `Precio unitario inválido para el producto: ${item.producto}` });
+      }
+      if (isNaN(item.gananciaUnitaria) || item.gananciaUnitaria < 0) {
+        return res.status(400).json({ error: `Ganancia unitaria inválida para el producto: ${item.producto}` });
+      }
+      if (isNaN(item.gananciaTotal) || item.gananciaTotal < 0) {
+        return res.status(400).json({ error: `Ganancia total inválida para el producto: ${item.producto}` });
       }
     }
 
@@ -30,11 +58,14 @@ router.post('/', async (req, res) => {
       cliente: req.body.cliente.id || req.body.cliente,
       productos: req.body.productos.map(p => ({
         producto: p.producto.id || p.producto,
-        cantidad: p.cantidad,
-        precioUnitario: parseFloat(p.precioUnitario), // Asegurar tipo numérico
-        gananciaUnitaria: parseFloat(p.gananciaUnitaria), // Agregar
-        gananciaTotal: parseFloat(p.gananciaTotal) // Agregar
-      }))
+        cantidad: parseFloat(p.cantidad),
+        precioUnitario: parseFloat(p.precioUnitario),
+        gananciaUnitaria: parseFloat(p.gananciaUnitaria),
+        gananciaTotal: parseFloat(p.gananciaTotal)
+      })),
+      total: parseFloat(req.body.total),
+      montoAbonado: parseFloat(req.body.montoAbonado || 0),
+      saldoPendiente: parseFloat(req.body.saldoPendiente || req.body.total)
     };
 
     const venta = new Venta(ventaData);
@@ -47,10 +78,6 @@ router.post('/', async (req, res) => {
       if (!producto) {
         throw new Error(`Producto no encontrado: ${item.producto}`);
       }
-      
-      if (producto.stock < item.cantidad) {
-        throw new Error(`Stock insuficiente para el producto: ${producto.nombre}`);
-      }
 
       // Lógica FIFO para descontar de los lotes
       let cantidadRestante = item.cantidad;
@@ -60,21 +87,49 @@ router.post('/', async (req, res) => {
         stockLote: { $gt: 0 }
       }).sort({ fecha: 1 }).session(session);
 
+      // Verificar si hay suficiente stock en los lotes
+      const stockTotalLotes = lotes.reduce((total, lote) => total + lote.stockLote, 0);
+      if (stockTotalLotes < item.cantidad) {
+        throw new Error(`Stock insuficiente en los lotes para el producto: ${producto.nombre}`);
+      }
+
+      // Registrar la salida en el historial
+      const historialSalida = new Historial({
+        producto: producto._id,
+        nombreProducto: producto.nombre,
+        codigoProducto: producto.codigo,
+        operacion: 'salida',
+        cantidad: item.cantidad,
+        stockAnterior: stockTotalLotes,
+        stockNuevo: stockTotalLotes - item.cantidad,
+        fecha: new Date(),
+        detalles: `Venta #${venta._id}`
+      });
+      await historialSalida.save({ session });
+
+      // Descontar de los lotes
       for (const lote of lotes) {
         if (cantidadRestante <= 0) break;
         const cantidadDeEsteLote = Math.min(lote.stockLote, cantidadRestante);
-
-        // Aquí puedes calcular la ganancia real usando lote.costoFinal si lo necesitas
-
-        // Descuenta del lote
+        
         lote.stockLote -= cantidadDeEsteLote;
         await lote.save({ session });
-
         cantidadRestante -= cantidadDeEsteLote;
       }
 
-      // Descuenta del stock total del producto (esto ya lo tienes)
-      producto.stock -= item.cantidad;
+      // Actualizar el stock del producto basado en los lotes restantes
+      const stockActualizado = await Historial.aggregate([
+        { 
+          $match: { 
+            producto: producto._id,
+            operacion: { $in: ['creacion', 'entrada'] }
+          }
+        },
+        { $group: { _id: null, total: { $sum: "$stockLote" } } }
+      ]).session(session);
+
+      // Actualizar el stock del producto con el total de los lotes
+      producto.stock = stockActualizado[0]?.total || 0;
       await producto.save({ session });
     }
 
@@ -92,122 +147,196 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Obtener todas las ventas (GET /api/ventas)
-router.get('/', async (req, res) => {
-  // Agregar validación de parámetro limit
-  if (req.query.limit && isNaN(parseInt(req.query.limit))) {
-    return res.status(400).json({ error: 'Parámetro limit inválido' });
-  }
-  
-  // Forzar mínimo 1 y máximo 1000 documentos
-  const limit = Math.min(Math.max(parseInt(req.query.limit || 10), 1), 1000);
-
-  const { 
-    page = 1, 
-    sort = 'fecha', 
-    order = 'desc',
-    cliente,
-    saldoPendiente,
-    fechaInicio,
-    fechaFin
-  } = req.query;
-
-  // Validación de ID
-  if (cliente && !mongoose.Types.ObjectId.isValid(cliente)) {
-    return res.status(400).json({ 
-      success: false,
-      error: "ID de cliente inválido" 
-    });
-  }
-
-  // Construir query de filtrado
-  const query = {};
-
-  // Validar ID de cliente
-  if (cliente) {
-    query.cliente = new mongoose.Types.ObjectId(cliente);
-  }
-
-  // Cambiar la condición del filtro saldoPendiente
-  if (saldoPendiente === 'true') { 
-    query.saldoPendiente = { $gt: 0 }; // Solo mostrar ventas con saldo pendiente
-  } else if (saldoPendiente === 'false') {
-    query.saldoPendiente = { $lte: 0 }; // Mostrar ventas sin saldo pendiente
-  } // Si saldoPendiente no está definido, no se aplica filtro
-
-  // Filtro por fechas
-  if (fechaInicio || fechaFin) {
-    query.fecha = {};
-    if (fechaInicio) query.fecha.$gte = new Date(fechaInicio);
-    if (fechaFin) query.fecha.$lte = new Date(fechaFin);
-  }
-
-  const options = {
-    page: parseInt(page),
-    limit: limit, // Usar el límite validado
-    sort: { [sort]: order === 'asc' ? 1 : -1 },
-    populate: [
-      { 
-        path: 'cliente', 
-        select: 'nombre rif telefono email direccion municipio',
-        transform: (doc) => doc ? { 
-          id: doc._id.toString(), 
-          ...doc.toObject() 
-        } : null 
-      },
-      { 
-        path: 'productos.producto',
-        select: 'nombre costoFinal', 
-        transform: (doc) => doc ? { 
-          id: doc._id.toString(), 
-          nombre: doc.nombre,
-          costoFinal: doc.costoFinal 
-        } : null
-      }
-    ],
-    select: '-__v'
-  };
+// Anular una venta (PUT /api/ventas/:id/anular)
+router.put('/:id/anular', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
+    const venta = await Venta.findById(req.params.id).session(session);
+    if (!venta) {
+      return res.status(404).json({ error: 'Venta no encontrada' });
+    }
+
+    if (venta.estado === 'anulada') {
+      return res.status(400).json({ error: 'La venta ya está anulada' });
+    }
+
+    // Devolver stock a los lotes
+    for (const item of venta.productos) {
+      const producto = await Producto.findById(item.producto).session(session);
+      if (!producto) continue;
+
+      // Buscar el lote más reciente para devolver el stock
+      const lote = await Historial.findOne({
+        producto: producto._id,
+        operacion: { $in: ['creacion', 'entrada'] }
+      }).sort({ fecha: -1 }).session(session);
+
+      if (lote) {
+        lote.stockLote += item.cantidad;
+        await lote.save({ session });
+      }
+
+      // Registrar la devolución en el historial
+      const historialDevolucion = new Historial({
+        producto: producto._id,
+        nombreProducto: producto.nombre,
+        codigoProducto: producto.codigo,
+        operacion: 'entrada',
+        cantidad: item.cantidad,
+        stockAnterior: producto.stock,
+        stockNuevo: producto.stock + item.cantidad,
+        fecha: new Date(),
+        detalles: `Devolución por anulación de venta #${venta._id}`
+      });
+      await historialDevolucion.save({ session });
+
+      // Actualizar stock del producto
+      producto.stock += item.cantidad;
+      await producto.save({ session });
+    }
+
+    // Marcar la venta como anulada
+    venta.estado = 'anulada';
+    await venta.save({ session });
+
+    await session.commitTransaction();
+    res.json({ message: 'Venta anulada correctamente', venta });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('Error al anular la venta:', error);
+    res.status(500).json({ 
+      error: 'Error al anular la venta',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    session.endSession();
+  }
+});
+
+// Obtener todas las ventas (GET /api/ventas)
+router.get('/', async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 10,
+      sort = 'fecha',
+      order = 'desc',
+      cliente,
+      estado,
+      estadoCredito,
+      tipoPago,
+      fechaInicio,
+      fechaFin,
+      saldoPendiente
+    } = req.query;
+
+    // Validar parámetros
+    if (limit && (isNaN(limit) || limit < 1 || limit > 100)) {
+      return res.status(400).json({ error: 'Límite inválido' });
+    }
+
+    if (cliente && !mongoose.Types.ObjectId.isValid(cliente)) {
+      return res.status(400).json({ error: 'ID de cliente inválido' });
+    }
+
+    // Construir query
+    const query = {};
+
+    if (cliente) query.cliente = cliente;
+    if (estado) query.estado = estado;
+    if (estadoCredito) query.estadoCredito = estadoCredito;
+    if (tipoPago) query.tipoPago = tipoPago;
+    if (saldoPendiente === 'true') query.saldoPendiente = { $gt: 0 };
+    if (saldoPendiente === 'false') query.saldoPendiente = { $lte: 0 };
+
+    // Validar y agregar filtros de fecha
+    if (fechaInicio || fechaFin) {
+      query.fecha = {};
+      if (fechaInicio) {
+        const start = new Date(fechaInicio);
+        if (isNaN(start.getTime())) {
+          return res.status(400).json({ error: 'Fecha de inicio inválida' });
+        }
+        query.fecha.$gte = start;
+      }
+      if (fechaFin) {
+        const end = new Date(fechaFin);
+        if (isNaN(end.getTime())) {
+          return res.status(400).json({ error: 'Fecha de fin inválida' });
+        }
+        query.fecha.$lte = end;
+      }
+    }
+
+    const options = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sort: { [sort]: order === 'asc' ? 1 : -1 },
+      populate: [
+        { 
+          path: 'cliente', 
+          select: 'nombre rif telefono email direccion municipio'
+        },
+        { 
+          path: 'productos.producto',
+          select: 'nombre costoFinal'
+        }
+      ]
+    };
+
     const result = await Venta.paginate(query, options);
 
-    // Calcular total de deudas
-    const totalDeudas = await Venta.aggregate([
+    // Calcular totales
+    const totales = await Venta.aggregate([
       { $match: query },
-      { $group: { _id: null, total: { $sum: "$saldoPendiente" } } }
+      { 
+        $group: { 
+          _id: null,
+          totalVentas: { $sum: "$total" },
+          totalSaldoPendiente: { $sum: "$saldoPendiente" }
+        } 
+      }
     ]);
 
-    res.status(200).json({
+    res.json({
       ventas: result.docs,
       total: result.totalDocs,
-      limit: result.limit,
-      page: result.page,
       pages: result.totalPages,
-      totalDeudas: totalDeudas[0]?.total || 0
+      currentPage: result.page,
+      totales: totales[0] || { totalVentas: 0, totalSaldoPendiente: 0 }
     });
   } catch (error) {
-    console.error('Error al obtener las ventas:', error);
-    res.status(500).json({ error: 'Error al obtener las ventas' });
+    console.error('Error al obtener ventas:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener ventas',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
 // Obtener una venta por ID (GET /api/ventas/:id)
 router.get('/:id', async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'ID de venta inválido' });
+    }
+
     const venta = await Venta.findById(req.params.id)
       .populate('cliente')
       .populate('productos.producto');
 
     if (!venta) {
-      return res.status(404).json({ message: 'Venta no encontrada' });
+      return res.status(404).json({ error: 'Venta no encontrada' });
     }
 
     res.json(venta);
   } catch (error) {
     console.error('Error al obtener la venta:', error);
     res.status(500).json({ 
-      message: 'Error en el servidor',
-      error: process.env.NODE_ENV === 'development' ? error.message : null
+      error: 'Error al obtener la venta',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

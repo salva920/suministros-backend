@@ -288,11 +288,12 @@ router.delete('/:id', async (req, res) => {
 });
 
 // Endpoint específico para entradas de stock
-// En POST /:id/entradas
-// Modificar la ruta POST para usar la fecha recibida
 router.post('/:id/entradas', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const producto = await Producto.findById(req.params.id);
+    const producto = await Producto.findById(req.params.id).session(session);
     if (!producto) {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
@@ -322,12 +323,23 @@ router.post('/:id/entradas', async (req, res) => {
     const acarreo = req.body.acarreo || 0;
     const flete = req.body.flete || 0;
     const costoFinalEntrada = ((costoInicial * cantidad) + acarreo + flete) / cantidad;
+
+    // Buscar el último lote activo
+    const ultimoLote = await Historial.findOne({
+      producto: producto._id,
+      operacion: { $in: ['creacion', 'entrada'] },
+      stockLote: { $gt: 0 }
+    }).sort({ fecha: -1 }).session(session);
+
+    // Calcular el nuevo stock del lote
+    const stockLoteAnterior = ultimoLote?.stockLote || 0;
+    const nuevoStockLote = stockLoteAnterior + cantidad;
     
     // Guardar los cambios
-    await producto.save();
+    await producto.save({ session });
     
     // Registrar en el historial
-    const historialEntry = await Historial.create({
+    const historialEntry = await Historial.create([{
       producto: producto._id,
       nombreProducto: producto.nombre,
       codigoProducto: producto.codigo,
@@ -336,37 +348,130 @@ router.post('/:id/entradas', async (req, res) => {
       stockAnterior: stockAnterior,
       stockNuevo: producto.stock,
       fecha: fechaHora,
-      stockLote: cantidad,
-      costoFinal: costoFinalEntrada
-    });
+      stockLote: nuevoStockLote,
+      costoFinal: costoFinalEntrada,
+      detalles: `Entrada de stock - Lote anterior: ${stockLoteAnterior}, Nuevo lote: ${nuevoStockLote}`
+    }], { session });
 
     // Verificar que el historial se creó correctamente
-    if (!historialEntry) {
+    if (!historialEntry || historialEntry.length === 0) {
       throw new Error('Error al crear el registro en el historial');
     }
+
+    await session.commitTransaction();
     
     res.json({
       producto: producto,
-      historial: historialEntry
+      historial: historialEntry[0],
+      lote: {
+        anterior: stockLoteAnterior,
+        nuevo: nuevoStockLote
+      }
     });
   } catch (error) {
+    await session.abortTransaction();
     console.error('Error en entrada de stock:', error);
     res.status(500).json({ 
       message: 'Error en entrada de stock', 
       error: error.message,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
+  } finally {
+    session.endSession();
   }
 });
 
 // GET /:id/lotes
 router.get('/:id/lotes', async (req, res) => {
-  const lotes = await Historial.find({
-    producto: req.params.id,
-    operacion: { $in: ['creacion', 'entrada'] },
-    stockLote: { $gt: 0 }
-  }).sort({ fecha: 1 }); // FIFO
-  res.json(lotes);
+  try {
+    // Validar que el ID sea un ObjectId válido
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ 
+        message: 'ID de producto inválido',
+        error: 'INVALID_ID'
+      });
+    }
+
+    // Verificar que el producto existe
+    const producto = await Producto.findById(req.params.id);
+    if (!producto) {
+      return res.status(404).json({ 
+        message: 'Producto no encontrado',
+        error: 'PRODUCT_NOT_FOUND'
+      });
+    }
+
+    const lotes = await Historial.aggregate([
+      {
+        $match: {
+          producto: mongoose.Types.ObjectId(req.params.id),
+          operacion: { $in: ['creacion', 'entrada'] },
+          stockLote: { $gt: 0 }
+        }
+      },
+      {
+        $addFields: {
+          loteId: "$_id",
+          fechaFormateada: {
+            $dateToString: { format: "%Y-%m-%d", date: "$fecha" }
+          },
+          costoFormateado: {
+            $round: ["$costoFinal", 2]
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          loteId: 1,
+          fecha: 1,
+          fechaFormateada: 1,
+          stockLote: 1,
+          costoFinal: 1,
+          costoFormateado: 1,
+          operacion: 1,
+          detalles: 1
+        }
+      },
+      { $sort: { fecha: 1 } }
+    ]);
+
+    // Verificar si hay lotes disponibles
+    if (!lotes || lotes.length === 0) {
+      return res.status(404).json({
+        message: 'No hay lotes disponibles para este producto',
+        error: 'NO_LOTS_AVAILABLE',
+        producto: {
+          id: producto._id,
+          nombre: producto.nombre,
+          stock: producto.stock
+        }
+      });
+    }
+    
+    // Calcular totales
+    const totales = lotes.reduce((acc, lote) => ({
+      stockTotal: acc.stockTotal + lote.stockLote,
+      costoPromedio: acc.costoPromedio + lote.costoFinal
+    }), { stockTotal: 0, costoPromedio: 0 });
+
+    totales.costoPromedio = totales.costoPromedio / lotes.length;
+    
+    res.json({
+      lotes,
+      totales: {
+        stockTotal: totales.stockTotal,
+        costoPromedio: Math.round(totales.costoPromedio * 100) / 100,
+        cantidadLotes: lotes.length
+      }
+    });
+  } catch (error) {
+    console.error('Error al obtener lotes:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener lotes',
+      error: error.message
+    });
+  }
 });
 
 module.exports = router;

@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const Historial = require('../models/historial');
+const mongoose = require('mongoose');
 
-// Obtener historial de entradas
+// Obtener historial de operaciones
 router.get('/', async (req, res) => {
   try {
     const { 
@@ -11,42 +12,97 @@ router.get('/', async (req, res) => {
       search,
       startDate,
       endDate,
-      tipo = 'entrada'
+      tipo = 'entrada',
+      producto
     } = req.query;
 
+    // Validar tipo de operación
+    const tiposValidos = ['entrada', 'salida', 'creacion', 'ajuste', 'eliminacion'];
+    if (!tiposValidos.includes(tipo)) {
+      return res.status(400).json({ 
+        error: 'Tipo de operación inválido',
+        tiposValidos 
+      });
+    }
+
+    // Construir query
     const query = { operacion: tipo };
     
-    // Agregar filtros de búsqueda
+    // Validar y agregar filtro de producto
+    if (producto) {
+      if (!mongoose.Types.ObjectId.isValid(producto)) {
+        return res.status(400).json({ error: 'ID de producto inválido' });
+      }
+      query.producto = producto;
+    }
+    
+    // Agregar filtros de búsqueda con límite de caracteres
     if (search) {
+      if (search.length > 50) {
+        return res.status(400).json({ error: 'Término de búsqueda demasiado largo' });
+      }
       query.$or = [
         { nombreProducto: { $regex: search, $options: 'i' } },
         { codigoProducto: { $regex: search, $options: 'i' } }
       ];
     }
 
-    // Filtrar por fecha
+    // Validar y agregar filtros de fecha
     if (startDate || endDate) {
       query.fecha = {};
-      if (startDate) query.fecha.$gte = new Date(startDate);
-      if (endDate) query.fecha.$lte = new Date(endDate);
+      if (startDate) {
+        const start = new Date(startDate);
+        if (isNaN(start.getTime())) {
+          return res.status(400).json({ error: 'Fecha de inicio inválida' });
+        }
+        query.fecha.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        if (isNaN(end.getTime())) {
+          return res.status(400).json({ error: 'Fecha de fin inválida' });
+        }
+        query.fecha.$lte = end;
+      }
     }
 
+    // Validar y ajustar límites de paginación
+    const limitNum = Math.min(Math.max(parseInt(limit) || 10, 1), 100);
+    const pageNum = Math.max(parseInt(page) || 1, 1);
+
     const result = await Historial.paginate(query, {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: { fecha: -1 }
+      page: pageNum,
+      limit: limitNum,
+      sort: { fecha: -1 },
+      select: '-__v'
     });
+
+    // Calcular totales por tipo de operación
+    const totales = await Historial.aggregate([
+      { $match: query },
+      { 
+        $group: { 
+          _id: null,
+          totalCantidad: { $sum: "$cantidad" },
+          totalStock: { $sum: "$stockLote" }
+        } 
+      }
+    ]);
 
     res.json({
       historial: result.docs,
       total: result.totalDocs,
       pages: result.totalPages,
-      currentPage: result.page
+      currentPage: result.page,
+      totales: totales[0] || { totalCantidad: 0, totalStock: 0 }
     });
     
   } catch (error) {
     console.error('Error al obtener historial:', error);
-    res.status(500).json({ message: 'Error en el servidor' });
+    res.status(500).json({ 
+      error: 'Error al obtener historial',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
