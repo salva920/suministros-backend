@@ -74,16 +74,23 @@ router.post('/', async (req, res) => {
     const ventaData = {
       fecha: new Date(req.body.fecha),
       cliente: req.body.cliente,
-      productos: req.body.productos.map(p => ({
-        producto: p.producto,
-        cantidad: parseFloat(p.cantidad),
-        precioUnitario: parseFloat(p.precioUnitario),
-        costoInicial: parseFloat(p.costoInicial),
-        gananciaUnitaria: parseFloat((p.precioUnitario - p.costoInicial).toFixed(2)),
-        gananciaTotal: parseFloat(((p.precioUnitario - p.costoInicial) * p.cantidad).toFixed(2))
-      })),
-      total: parseFloat(req.body.productos.reduce((sum, p) => 
-        sum + (p.precioUnitario * p.cantidad), 0).toFixed(2)),
+      productos: req.body.productos.map(p => {
+        const precioUnitario = parseFloat(p.precioUnitario);
+        const costoInicial = parseFloat(p.costoInicial);
+        const cantidad = parseFloat(p.cantidad);
+        const gananciaUnitaria = parseFloat((precioUnitario - costoInicial).toFixed(2));
+        const gananciaTotal = parseFloat((gananciaUnitaria * cantidad).toFixed(2));
+        
+        return {
+          producto: p.producto,
+          cantidad,
+          precioUnitario,
+          costoInicial,
+          gananciaUnitaria,
+          gananciaTotal
+        };
+      }),
+      total: parseFloat(req.body.total),
       tipoPago: req.body.tipoPago,
       metodoPago: req.body.metodoPago,
       nrFactura: req.body.nrFactura,
@@ -104,13 +111,17 @@ router.post('/', async (req, res) => {
       diferencia: Math.abs(gananciaTotalCalculada - ventaData.total)
     });
 
-    if (Math.abs(gananciaTotalCalculada - ventaData.total) > 0.01) {
+    // Verificar que el total coincida con la suma de (precioUnitario * cantidad)
+    const totalCalculado = ventaData.productos.reduce((sum, p) => 
+      sum + (p.precioUnitario * p.cantidad), 0);
+
+    if (Math.abs(totalCalculado - ventaData.total) > 0.01) {
       return res.status(400).json({ 
-        error: 'La suma de ganancias no coincide con el total',
+        error: 'El total no coincide con la suma de los productos',
         detalles: {
           total: ventaData.total,
-          gananciaTotalCalculada,
-          diferencia: Math.abs(gananciaTotalCalculada - ventaData.total)
+          totalCalculado,
+          diferencia: Math.abs(totalCalculado - ventaData.total)
         }
       });
     }
