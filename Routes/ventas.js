@@ -392,26 +392,6 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'ID de venta inválido' });
     }
 
-    const { montoAbonado, total } = req.body;
-    
-    console.log('Montos recibidos:', {
-      montoAbonado,
-      total,
-      tipoMontoAbonado: typeof montoAbonado,
-      tipoTotal: typeof total
-    });
-    
-    // Validaciones básicas
-    if (typeof montoAbonado !== 'number' || montoAbonado < 0) {
-      console.error('Monto abonado inválido:', montoAbonado);
-      return res.status(400).json({ error: 'Monto abonado inválido' });
-    }
-    
-    if (montoAbonado > total) {
-      console.error('Abono excede el total:', { montoAbonado, total });
-      return res.status(400).json({ error: 'El abono no puede exceder el total' });
-    }
-
     // Buscar la venta existente
     const venta = await Venta.findById(req.params.id).session(session);
     if (!venta) {
@@ -419,17 +399,34 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Venta no encontrada' });
     }
 
-    console.log('Venta encontrada:', {
-      id: venta._id,
-      montoAbonadoActual: venta.montoAbonado,
-      saldoPendienteActual: venta.saldoPendiente,
-      estadoCreditoActual: venta.estadoCredito
+    // Validar y normalizar los datos recibidos
+    const montoAbonado = parseFloat(req.body.montoAbonado || 0);
+    const total = parseFloat(req.body.total || venta.total);
+    const saldoPendiente = parseFloat(req.body.saldoPendiente || 0);
+
+    console.log('Montos normalizados:', {
+      montoAbonado,
+      total,
+      saldoPendiente,
+      tipoMontoAbonado: typeof montoAbonado,
+      tipoTotal: typeof total
     });
 
-    // Actualizar solo los campos necesarios
-    venta.montoAbonado = parseFloat(montoAbonado.toFixed(2));
-    venta.saldoPendiente = parseFloat((total - montoAbonado).toFixed(2));
-    venta.estadoCredito = venta.saldoPendiente > 0 ? 'vigente' : 'pagado';
+    // Validaciones básicas
+    if (isNaN(montoAbonado) || montoAbonado < 0) {
+      console.error('Monto abonado inválido:', montoAbonado);
+      return res.status(400).json({ error: 'Monto abonado inválido' });
+    }
+
+    if (montoAbonado > total) {
+      console.error('Abono excede el total:', { montoAbonado, total });
+      return res.status(400).json({ error: 'El abono no puede exceder el total' });
+    }
+
+    // Actualizar los campos
+    venta.montoAbonado = montoAbonado;
+    venta.saldoPendiente = saldoPendiente;
+    venta.estadoCredito = saldoPendiente > 0 ? 'vigente' : 'pagado';
 
     console.log('Datos actualizados:', {
       nuevoMontoAbonado: venta.montoAbonado,
@@ -437,10 +434,10 @@ router.put('/:id', async (req, res) => {
       nuevoEstadoCredito: venta.estadoCredito
     });
 
-    // Guardar cambios (esto ejecutará las validaciones y hooks)
+    // Guardar cambios
     await venta.save({ session });
 
-    // Poblar los campos relacionados después de guardar
+    // Poblar los campos relacionados
     await venta.populate([
       { 
         path: 'cliente',
