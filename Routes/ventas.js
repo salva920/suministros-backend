@@ -382,41 +382,60 @@ router.put('/:id', async (req, res) => {
   session.startTransaction();
   
   try {
+    console.log('=== Inicio de actualización de venta ===');
+    console.log('ID de venta recibido:', req.params.id);
+    console.log('Datos recibidos:', JSON.stringify(req.body, null, 2));
+
     // Validar ID de venta
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      console.error('ID de venta inválido:', req.params.id);
       return res.status(400).json({ error: 'ID de venta inválido' });
     }
 
     const { montoAbonado, total } = req.body;
     
+    console.log('Montos recibidos:', {
+      montoAbonado,
+      total,
+      tipoMontoAbonado: typeof montoAbonado,
+      tipoTotal: typeof total
+    });
+    
     // Validaciones básicas
     if (typeof montoAbonado !== 'number' || montoAbonado < 0) {
+      console.error('Monto abonado inválido:', montoAbonado);
       return res.status(400).json({ error: 'Monto abonado inválido' });
     }
     
     if (montoAbonado > total) {
+      console.error('Abono excede el total:', { montoAbonado, total });
       return res.status(400).json({ error: 'El abono no puede exceder el total' });
     }
 
     // Buscar la venta existente
     const venta = await Venta.findById(req.params.id).session(session);
     if (!venta) {
+      console.error('Venta no encontrada:', req.params.id);
       return res.status(404).json({ message: 'Venta no encontrada' });
     }
 
-    // Actualizar campos
+    console.log('Venta encontrada:', {
+      id: venta._id,
+      montoAbonadoActual: venta.montoAbonado,
+      saldoPendienteActual: venta.saldoPendiente,
+      estadoCreditoActual: venta.estadoCredito
+    });
+
+    // Actualizar solo los campos necesarios
     venta.montoAbonado = parseFloat(montoAbonado.toFixed(2));
-    venta.total = parseFloat(total.toFixed(2));
     venta.saldoPendiente = parseFloat((total - montoAbonado).toFixed(2));
-    venta.estadoCredito = (total - montoAbonado) > 0 ? 'vigente' : 'pagado';
-    venta.cliente = req.body.cliente?.id || req.body.cliente;
-    venta.productos = req.body.productos?.map(p => ({
-      producto: p.producto?.id || p.producto,
-      cantidad: parseFloat(p.cantidad.toFixed(2)),
-      precioUnitario: parseFloat(p.precioUnitario.toFixed(2)),
-      gananciaUnitaria: parseFloat(p.gananciaUnitaria.toFixed(2)),
-      gananciaTotal: parseFloat(p.gananciaTotal.toFixed(2))
-    }));
+    venta.estadoCredito = venta.saldoPendiente > 0 ? 'vigente' : 'pagado';
+
+    console.log('Datos actualizados:', {
+      nuevoMontoAbonado: venta.montoAbonado,
+      nuevoSaldoPendiente: venta.saldoPendiente,
+      nuevoEstadoCredito: venta.estadoCredito
+    });
 
     // Guardar cambios (esto ejecutará las validaciones y hooks)
     await venta.save({ session });
@@ -433,17 +452,30 @@ router.put('/:id', async (req, res) => {
       }
     ]);
 
+    console.log('Venta actualizada exitosamente:', {
+      id: venta._id,
+      montoAbonado: venta.montoAbonado,
+      saldoPendiente: venta.saldoPendiente,
+      estadoCredito: venta.estadoCredito
+    });
+
     await session.commitTransaction();
     res.json(venta);
   } catch (error) {
     await session.abortTransaction();
-    console.error('Error al actualizar venta:', error);
+    console.error('Error al actualizar venta:', {
+      error: error.message,
+      stack: error.stack,
+      body: req.body,
+      params: req.params
+    });
     res.status(500).json({ 
       message: 'Error en el servidor',
       error: process.env.NODE_ENV === 'development' ? error.message : null
     });
   } finally {
     session.endSession();
+    console.log('=== Fin de actualización de venta ===');
   }
 });
 
