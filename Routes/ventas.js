@@ -272,7 +272,14 @@ router.get('/', async (req, res) => {
     // Construir query
     const query = {};
 
-    if (cliente) query.cliente = cliente;
+    // Validar y normalizar ID del cliente
+    if (cliente) {
+      if (!mongoose.Types.ObjectId.isValid(cliente)) {
+        return res.status(400).json({ error: 'ID de cliente inválido' });
+      }
+      query.cliente = new mongoose.Types.ObjectId(cliente);
+    }
+
     if (estado) query.estado = estado;
     if (estadoCredito) query.estadoCredito = estadoCredito;
     if (tipoPago) query.tipoPago = tipoPago;
