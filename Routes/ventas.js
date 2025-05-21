@@ -398,39 +398,31 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'El abono no puede exceder el total' });
     }
 
-    // Normalizar datos
-    const updateData = {
-      ...req.body,
-      montoAbonado: parseFloat(montoAbonado.toFixed(2)),
-      total: parseFloat(total.toFixed(2)),
-      saldoPendiente: parseFloat((total - montoAbonado).toFixed(2)),
-      estadoCredito: (total - montoAbonado) > 0 ? 'vigente' : 'pagado',
-      cliente: req.body.cliente?.id || req.body.cliente,
-      productos: req.body.productos?.map(p => ({
-        producto: p.producto?.id || p.producto,
-        cantidad: parseFloat(p.cantidad.toFixed(2)),
-        precioUnitario: parseFloat(p.precioUnitario.toFixed(2)),
-        gananciaUnitaria: parseFloat(p.gananciaUnitaria.toFixed(2)),
-        gananciaTotal: parseFloat(p.gananciaTotal.toFixed(2))
-      }))
-    };
-
-    // Verificar que la venta existe
-    const ventaExistente = await Venta.findById(req.params.id).session(session);
-    if (!ventaExistente) {
+    // Buscar la venta existente
+    const venta = await Venta.findById(req.params.id).session(session);
+    if (!venta) {
       return res.status(404).json({ message: 'Venta no encontrada' });
     }
 
-    // Actualizar venta
-    const ventaActualizada = await Venta.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { 
-        new: true, 
-        session,
-        runValidators: true
-      }
-    ).populate([
+    // Actualizar campos
+    venta.montoAbonado = parseFloat(montoAbonado.toFixed(2));
+    venta.total = parseFloat(total.toFixed(2));
+    venta.saldoPendiente = parseFloat((total - montoAbonado).toFixed(2));
+    venta.estadoCredito = (total - montoAbonado) > 0 ? 'vigente' : 'pagado';
+    venta.cliente = req.body.cliente?.id || req.body.cliente;
+    venta.productos = req.body.productos?.map(p => ({
+      producto: p.producto?.id || p.producto,
+      cantidad: parseFloat(p.cantidad.toFixed(2)),
+      precioUnitario: parseFloat(p.precioUnitario.toFixed(2)),
+      gananciaUnitaria: parseFloat(p.gananciaUnitaria.toFixed(2)),
+      gananciaTotal: parseFloat(p.gananciaTotal.toFixed(2))
+    }));
+
+    // Guardar cambios (esto ejecutará las validaciones y hooks)
+    await venta.save({ session });
+
+    // Poblar los campos relacionados después de guardar
+    await venta.populate([
       { 
         path: 'cliente',
         select: 'nombre rif telefono email direccion municipio'
@@ -442,7 +434,7 @@ router.put('/:id', async (req, res) => {
     ]);
 
     await session.commitTransaction();
-    res.json(ventaActualizada);
+    res.json(venta);
   } catch (error) {
     await session.abortTransaction();
     console.error('Error al actualizar venta:', error);
