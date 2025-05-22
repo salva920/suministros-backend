@@ -131,37 +131,60 @@ router.post('/transacciones', async (req, res) => {
 
     const { fecha, concepto, moneda, tipo, monto, tasaCambio } = req.body;
     
+    // Validar y convertir valores numéricos
+    const montoNumerico = parseFloat(monto);
+    const tasaCambioNumerica = parseFloat(tasaCambio);
+
+    if (isNaN(montoNumerico) || isNaN(tasaCambioNumerica)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valores numéricos inválidos'
+      });
+    }
+
     const nuevaTransaccion = {
       fecha: formatDateToUTC(fecha),
-      concepto,
+      concepto: concepto.trim(),
       moneda,
-      entrada: tipo === 'entrada' ? parseFloat(monto) : 0,
-      salida: tipo === 'salida' ? parseFloat(monto) : 0,
-      tasaCambio: parseFloat(tasaCambio)
+      entrada: tipo === 'entrada' ? montoNumerico : 0,
+      salida: tipo === 'salida' ? montoNumerico : 0,
+      tasaCambio: tasaCambioNumerica
     };
 
+    // Agregar la nueva transacción
     caja.transacciones.push(nuevaTransaccion);
+
+    // Ordenar transacciones por fecha
     caja.transacciones.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
+    // Recalcular saldos
     let saldos = { USD: 0, Bs: 0 };
     caja.transacciones.forEach(t => {
-      saldos[t.moneda] += t.entrada - t.salida;
-      t.saldo = saldos[t.moneda];
+      if (t.moneda === 'USD' || t.moneda === 'Bs') {
+        saldos[t.moneda] += t.entrada - t.salida;
+        t.saldo = saldos[t.moneda];
+      }
     });
 
+    // Actualizar saldos en el documento
     caja.saldos = saldos;
+
+    // Guardar cambios
     await caja.save();
 
+    // Ordenar transacciones para la respuesta
     const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
+
     res.json({ 
       success: true, 
       transacciones: transaccionesOrdenadas, 
       saldos: caja.saldos 
     });
   } catch (error) {
+    console.error('Error al procesar transacción:', error);
     res.status(500).json({ 
       success: false,
-      message: 'Error al agregar transacción', 
+      message: 'Error al procesar la transacción', 
       error: error.message 
     });
   }
