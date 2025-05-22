@@ -94,6 +94,35 @@ router.get('/', async (req, res) => {
     const caja = await Caja.findOne() || 
       await Caja.create({ transacciones: [], saldos: { USD: 0, Bs: 0 }});
     
+    // Calcular resumen de operaciones
+    let resumen = {
+      USD: { entradas: 0, salidas: 0, saldo: 0 },
+      Bs: { entradas: 0, salidas: 0, saldo: 0 }
+    };
+
+    caja.transacciones.forEach(t => {
+      if (t.moneda === 'USD' || t.moneda === 'Bs') {
+        resumen[t.moneda].entradas += t.entrada;
+        resumen[t.moneda].salidas += t.salida;
+        resumen[t.moneda].saldo = resumen[t.moneda].entradas - resumen[t.moneda].salidas;
+      }
+    });
+
+    console.log('\n=== RESUMEN DE OPERACIONES ===');
+    console.log('USD:');
+    console.log(`  Total Entradas: ${resumen.USD.entradas.toFixed(2)}`);
+    console.log(`  Total Salidas: ${resumen.USD.salidas.toFixed(2)}`);
+    console.log(`  Saldo Calculado: ${resumen.USD.saldo.toFixed(2)}`);
+    console.log(`  Saldo en Caja: ${caja.saldos.USD.toFixed(2)}`);
+    console.log('Bs:');
+    console.log(`  Total Entradas: ${resumen.Bs.entradas.toFixed(2)}`);
+    console.log(`  Total Salidas: ${resumen.Bs.salidas.toFixed(2)}`);
+    console.log(`  Saldo Calculado: ${resumen.Bs.saldo.toFixed(2)}`);
+    console.log(`  Saldo en Caja: ${caja.saldos.Bs.toFixed(2)}`);
+    console.log('\n=== VERIFICACIÓN DE SALDOS ===');
+    console.log(`Diferencia USD: ${(resumen.USD.saldo - caja.saldos.USD).toFixed(2)}`);
+    console.log(`Diferencia Bs: ${(resumen.Bs.saldo - caja.saldos.Bs).toFixed(2)}`);
+    
     // Usar la nueva función de ordenamiento
     const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
 
@@ -104,6 +133,7 @@ router.get('/', async (req, res) => {
       id: caja._id
     });
   } catch (error) {
+    console.error('Error al obtener la caja:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al obtener la caja', 
