@@ -155,7 +155,7 @@ router.post('/transacciones', async (req, res) => {
     // Asegurar que todas las transacciones existentes tengan tasaCambio
     caja.transacciones = caja.transacciones.map(t => ({
       ...t,
-      tasaCambio: t.tasaCambio || tasaCambioNumerica // Usar la nueva tasa si no existe
+      tasaCambio: t.tasaCambio || tasaCambioNumerica
     }));
 
     // Agregar nueva transacción
@@ -163,6 +163,30 @@ router.post('/transacciones', async (req, res) => {
     
     // Ordenar cronológicamente
     caja.transacciones.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    // Calcular totales para verificación
+    let totalEntradasUSD = 0;
+    let totalSalidasUSD = 0;
+    let totalEntradasBs = 0;
+    let totalSalidasBs = 0;
+
+    caja.transacciones.forEach(t => {
+      if (t.moneda === 'USD') {
+        totalEntradasUSD += t.entrada;
+        totalSalidasUSD += t.salida;
+      } else if (t.moneda === 'Bs') {
+        totalEntradasBs += t.entrada;
+        totalSalidasBs += t.salida;
+      }
+    });
+
+    console.log('=== VERIFICACIÓN DE SALDOS ===');
+    console.log('USD - Total Entradas:', totalEntradasUSD);
+    console.log('USD - Total Salidas:', totalSalidasUSD);
+    console.log('USD - Saldo Calculado:', totalEntradasUSD - totalSalidasUSD);
+    console.log('Bs - Total Entradas:', totalEntradasBs);
+    console.log('Bs - Total Salidas:', totalSalidasBs);
+    console.log('Bs - Saldo Calculado:', totalEntradasBs - totalSalidasBs);
 
     // Recalcular saldos desde cero
     let saldos = { USD: 0, Bs: 0 };
@@ -172,6 +196,10 @@ router.post('/transacciones', async (req, res) => {
         caja.transacciones[index].saldo = saldos[t.moneda];
       }
     });
+
+    console.log('=== SALDOS FINALES ===');
+    console.log('USD - Saldo Final:', saldos.USD);
+    console.log('Bs - Saldo Final:', saldos.Bs);
 
     // Actualizar saldos generales
     caja.saldos = saldos;
