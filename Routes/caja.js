@@ -107,21 +107,6 @@ router.get('/', async (req, res) => {
         resumen[t.moneda].saldo = resumen[t.moneda].entradas - resumen[t.moneda].salidas;
       }
     });
-
-    console.log('\n=== RESUMEN DE OPERACIONES ===');
-    console.log('USD:');
-    console.log(`  Total Entradas: ${resumen.USD.entradas.toFixed(2)}`);
-    console.log(`  Total Salidas: ${resumen.USD.salidas.toFixed(2)}`);
-    console.log(`  Saldo Calculado: ${resumen.USD.saldo.toFixed(2)}`);
-    console.log(`  Saldo en Caja: ${caja.saldos.USD.toFixed(2)}`);
-    console.log('Bs:');
-    console.log(`  Total Entradas: ${resumen.Bs.entradas.toFixed(2)}`);
-    console.log(`  Total Salidas: ${resumen.Bs.salidas.toFixed(2)}`);
-    console.log(`  Saldo Calculado: ${resumen.Bs.saldo.toFixed(2)}`);
-    console.log(`  Saldo en Caja: ${caja.saldos.Bs.toFixed(2)}`);
-    console.log('\n=== VERIFICACIÓN DE SALDOS ===');
-    console.log(`Diferencia USD: ${(resumen.USD.saldo - caja.saldos.USD).toFixed(2)}`);
-    console.log(`Diferencia Bs: ${(resumen.Bs.saldo - caja.saldos.Bs).toFixed(2)}`);
     
     // Usar la nueva función de ordenamiento
     const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
@@ -133,7 +118,6 @@ router.get('/', async (req, res) => {
       id: caja._id
     });
   } catch (error) {
-    console.error('Error al obtener la caja:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al obtener la caja', 
@@ -145,12 +129,8 @@ router.get('/', async (req, res) => {
 // Registrar nueva transacción
 router.post('/transacciones', async (req, res) => {
   try {
-    console.log('\n=== INICIO DE NUEVA TRANSACCIÓN ===');
-    console.log('Datos recibidos:', req.body);
-
     const { error } = validateTransaction(req.body);
     if (error) {
-      console.log('Errores de validación:', error.details);
       return res.status(400).json({ 
         success: false,
         message: 'Errores de validación',
@@ -165,7 +145,6 @@ router.post('/transacciones', async (req, res) => {
     const tasaCambioNumerica = parseFloat(tasaCambio);
 
     if (isNaN(montoNumerico) || isNaN(tasaCambioNumerica)) {
-      console.log('Valores numéricos inválidos:', { monto, tasaCambio });
       return res.status(400).json({
         success: false,
         message: 'Valores numéricos inválidos'
@@ -181,17 +160,10 @@ router.post('/transacciones', async (req, res) => {
       tasaCambio: tasaCambioNumerica
     };
 
-    console.log('Nueva transacción a agregar:', nuevaTransaccion);
-
     // Obtener o crear caja
     let caja = await Caja.findOne() || await Caja.create({ 
       transacciones: [], 
       saldos: { USD: 0, Bs: 0 }
-    });
-
-    console.log('Estado actual de la caja:', {
-      totalTransacciones: caja.transacciones.length,
-      saldosActuales: caja.saldos
     });
 
     // Asegurar que todas las transacciones existentes tengan tasaCambio
@@ -206,30 +178,6 @@ router.post('/transacciones', async (req, res) => {
     // Ordenar cronológicamente
     caja.transacciones.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-    // Calcular totales para verificación
-    let totalEntradasUSD = 0;
-    let totalSalidasUSD = 0;
-    let totalEntradasBs = 0;
-    let totalSalidasBs = 0;
-
-    caja.transacciones.forEach(t => {
-      if (t.moneda === 'USD') {
-        totalEntradasUSD += t.entrada;
-        totalSalidasUSD += t.salida;
-      } else if (t.moneda === 'Bs') {
-        totalEntradasBs += t.entrada;
-        totalSalidasBs += t.salida;
-      }
-    });
-
-    console.log('\n=== VERIFICACIÓN DE SALDOS ===');
-    console.log('USD - Total Entradas:', totalEntradasUSD.toFixed(2));
-    console.log('USD - Total Salidas:', totalSalidasUSD.toFixed(2));
-    console.log('USD - Saldo Calculado:', (totalEntradasUSD - totalSalidasUSD).toFixed(2));
-    console.log('Bs - Total Entradas:', totalEntradasBs.toFixed(2));
-    console.log('Bs - Total Salidas:', totalSalidasBs.toFixed(2));
-    console.log('Bs - Saldo Calculado:', (totalEntradasBs - totalSalidasBs).toFixed(2));
-
     // Recalcular saldos desde cero
     let saldos = { USD: 0, Bs: 0 };
     caja.transacciones.forEach((t, index) => {
@@ -239,18 +187,11 @@ router.post('/transacciones', async (req, res) => {
       }
     });
 
-    console.log('\n=== SALDOS FINALES ===');
-    console.log('USD - Saldo Final:', saldos.USD.toFixed(2));
-    console.log('Bs - Saldo Final:', saldos.Bs.toFixed(2));
-
     // Actualizar saldos generales
     caja.saldos = saldos;
     
     // Guardar cambios
     await caja.save();
-    console.log('\n=== TRANSACCIÓN GUARDADA ===');
-    console.log('Total de transacciones:', caja.transacciones.length);
-    console.log('Saldos finales:', caja.saldos);
 
     // Ordenar transacciones para la respuesta (más recientes primero)
     const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
@@ -262,8 +203,6 @@ router.post('/transacciones', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('\n=== ERROR EN LA TRANSACCIÓN ===');
-    console.error('Error detallado:', error);
     res.status(500).json({
       success: false,
       message: 'Error interno del servidor',
