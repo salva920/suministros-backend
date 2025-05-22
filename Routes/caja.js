@@ -124,12 +124,9 @@ router.post('/transacciones', async (req, res) => {
       });
     }
 
-    const caja = await Caja.findOne();
+    let caja = await Caja.findOne();
     if (!caja) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Caja no encontrada' 
-      });
+      caja = await Caja.create({ transacciones: [], saldos: { USD: 0, Bs: 0 } });
     }
 
     const { fecha, concepto, moneda, tipo, monto, tasaCambio } = req.body;
@@ -140,30 +137,26 @@ router.post('/transacciones', async (req, res) => {
       moneda,
       entrada: tipo === 'entrada' ? parseFloat(monto) : 0,
       salida: tipo === 'salida' ? parseFloat(monto) : 0,
-      tasaCambio: parseFloat(tasaCambio),
-      saldo: caja.saldos[moneda] + (tipo === 'entrada' ? parseFloat(monto) : -parseFloat(monto))
+      tasaCambio: parseFloat(tasaCambio)
     };
 
-    // Actualizar saldos
-    const saldosActualizados = { ...caja.saldos };
-    saldosActualizados[moneda] = nuevaTransaccion.saldo;
+    caja.transacciones.push(nuevaTransaccion);
+    caja.transacciones.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-    const updated = await Caja.findOneAndUpdate(
-      { _id: caja._id },
-      { 
-        $push: { transacciones: nuevaTransaccion },
-        $set: { saldos: saldosActualizados }
-      },
-      { new: true }
-    );
+    let saldos = { USD: 0, Bs: 0 };
+    caja.transacciones.forEach(t => {
+      saldos[t.moneda] += t.entrada - t.salida;
+      t.saldo = saldos[t.moneda];
+    });
 
-    // Usar la nueva función de ordenamiento
-    const transaccionesOrdenadas = ordenarTransacciones(updated.transacciones);
+    caja.saldos = saldos;
+    await caja.save();
 
-    res.json({
-      success: true,
-      transacciones: transaccionesOrdenadas,
-      saldos: updated.saldos
+    const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
+    res.json({ 
+      success: true, 
+      transacciones: transaccionesOrdenadas, 
+      saldos: caja.saldos 
     });
   } catch (error) {
     res.status(500).json({ 
@@ -208,10 +201,8 @@ const isValidObjectId = (id) => {
 router.put('/transacciones/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('ID recibido:', id);
     
     if (!isValidObjectId(id)) {
-      console.log('ID inválido:', id);
       return res.status(400).json({
         success: false,
         message: 'ID de transacción inválido'
@@ -227,7 +218,7 @@ router.put('/transacciones/:id', async (req, res) => {
       });
     }
 
-    const caja = await Caja.findOne();
+    let caja = await Caja.findOne();
     if (!caja) {
       return res.status(404).json({ 
         success: false,
@@ -236,8 +227,6 @@ router.put('/transacciones/:id', async (req, res) => {
     }
 
     const transaccionIndex = caja.transacciones.findIndex(t => t._id.toString() === id);
-    console.log('Índice de transacción:', transaccionIndex);
-    
     if (transaccionIndex === -1) {
       return res.status(404).json({ 
         success: false,
@@ -247,50 +236,35 @@ router.put('/transacciones/:id', async (req, res) => {
 
     const { fecha, concepto, moneda, tipo, monto, tasaCambio } = req.body;
     
-    const transaccionOriginal = caja.transacciones[transaccionIndex];
-    const montoOriginal = transaccionOriginal.entrada - transaccionOriginal.salida;
-    const montoNuevo = tipo === 'entrada' ? parseFloat(monto) : -parseFloat(monto);
-    const diferencia = montoNuevo - montoOriginal;
-
-    const transaccionActualizada = {
-      _id: new mongoose.Types.ObjectId(id),
+    // Actualizar la transacción
+    caja.transacciones[transaccionIndex] = {
+      ...caja.transacciones[transaccionIndex],
       fecha: formatDateToUTC(fecha),
       concepto,
       moneda,
       entrada: tipo === 'entrada' ? parseFloat(monto) : 0,
       salida: tipo === 'salida' ? parseFloat(monto) : 0,
-      tasaCambio: parseFloat(tasaCambio),
-      saldo: transaccionOriginal.saldo + diferencia
+      tasaCambio: parseFloat(tasaCambio)
     };
 
-    const updated = await Caja.findOneAndUpdate(
-      { _id: caja._id, 'transacciones._id': id },
-      { 
-        $set: { 
-          'transacciones.$': transaccionActualizada,
-          [`saldos.${moneda}`]: caja.saldos[moneda] + diferencia
-        }
-      },
-      { new: true }
-    );
+    caja.transacciones.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    
+    let saldos = { USD: 0, Bs: 0 };
+    caja.transacciones.forEach(t => {
+      saldos[t.moneda] += t.entrada - t.salida;
+      t.saldo = saldos[t.moneda];
+    });
 
-    if (!updated) {
-      return res.status(404).json({
-        success: false,
-        message: 'No se pudo actualizar la transacción'
-      });
-    }
+    caja.saldos = saldos;
+    await caja.save();
 
-    // Usar la nueva función de ordenamiento
-    const transaccionesOrdenadas = ordenarTransacciones(updated.transacciones);
-
-    res.json({
-      success: true,
-      transacciones: transaccionesOrdenadas,
-      saldos: updated.saldos
+    const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
+    res.json({ 
+      success: true, 
+      transacciones: transaccionesOrdenadas, 
+      saldos: caja.saldos 
     });
   } catch (error) {
-    console.error('Error al actualizar:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al actualizar transacción', 
@@ -303,17 +277,15 @@ router.put('/transacciones/:id', async (req, res) => {
 router.delete('/transacciones/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('ID a eliminar:', id);
     
     if (!isValidObjectId(id)) {
-      console.log('ID inválido:', id);
       return res.status(400).json({
         success: false,
         message: 'ID de transacción inválido'
       });
     }
 
-    const caja = await Caja.findOne();
+    let caja = await Caja.findOne();
     if (!caja) {
       return res.status(404).json({ 
         success: false,
@@ -321,37 +293,25 @@ router.delete('/transacciones/:id', async (req, res) => {
       });
     }
 
-    const transaccion = caja.transacciones.id(id);
-    if (!transaccion) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Transacción no encontrada' 
-      });
-    }
+    caja.transacciones = caja.transacciones.filter(t => t._id.toString() !== id);
+    caja.transacciones.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-    const transaccionAEliminar = caja.transacciones.find(t => t._id.toString() === id);
-    const moneda = transaccionAEliminar.moneda;
-    const monto = transaccionAEliminar.entrada - transaccionAEliminar.salida;
+    let saldos = { USD: 0, Bs: 0 };
+    caja.transacciones.forEach(t => {
+      saldos[t.moneda] += t.entrada - t.salida;
+      t.saldo = saldos[t.moneda];
+    });
 
-    const updated = await Caja.findOneAndUpdate(
-      { _id: caja._id },
-      { 
-        $pull: { transacciones: { _id: id } },
-        $inc: { [`saldos.${moneda}`]: -monto }
-      },
-      { new: true }
-    );
+    caja.saldos = saldos;
+    await caja.save();
 
-    // Usar la nueva función de ordenamiento
-    const transaccionesOrdenadas = ordenarTransacciones(updated.transacciones);
-
-    res.json({
-      success: true,
-      transacciones: transaccionesOrdenadas,
-      saldos: updated.saldos
+    const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
+    res.json({ 
+      success: true, 
+      transacciones: transaccionesOrdenadas, 
+      saldos: caja.saldos 
     });
   } catch (error) {
-    console.error('Error al eliminar:', error);
     res.status(500).json({ 
       success: false,
       message: 'Error al eliminar la transacción', 
