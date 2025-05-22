@@ -124,13 +124,8 @@ router.post('/transacciones', async (req, res) => {
       });
     }
 
-    let caja = await Caja.findOne();
-    if (!caja) {
-      caja = await Caja.create({ transacciones: [], saldos: { USD: 0, Bs: 0 } });
-    }
-
     const { fecha, concepto, moneda, tipo, monto, tasaCambio } = req.body;
-    
+
     // Validar y convertir valores numéricos
     const montoNumerico = parseFloat(monto);
     const tasaCambioNumerica = parseFloat(tasaCambio);
@@ -151,41 +146,48 @@ router.post('/transacciones', async (req, res) => {
       tasaCambio: tasaCambioNumerica
     };
 
-    // Agregar la nueva transacción
-    caja.transacciones.push(nuevaTransaccion);
+    // Obtener o crear caja
+    let caja = await Caja.findOne() || await Caja.create({ 
+      transacciones: [], 
+      saldos: { USD: 0, Bs: 0 }
+    });
 
-    // Ordenar transacciones por fecha
+    // Agregar nueva transacción
+    caja.transacciones.push(nuevaTransaccion);
+    
+    // Ordenar cronológicamente
     caja.transacciones.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-    // Recalcular saldos
+    // Recalcular saldos desde cero
     let saldos = { USD: 0, Bs: 0 };
-    caja.transacciones.forEach(t => {
+    caja.transacciones.forEach((t, index) => {
       if (t.moneda === 'USD' || t.moneda === 'Bs') {
         saldos[t.moneda] += t.entrada - t.salida;
-        t.saldo = saldos[t.moneda];
+        caja.transacciones[index].saldo = saldos[t.moneda]; // Actualizar saldo en cada transacción
       }
     });
 
-    // Actualizar saldos en el documento
+    // Actualizar saldos generales
     caja.saldos = saldos;
-
+    
     // Guardar cambios
     await caja.save();
 
-    // Ordenar transacciones para la respuesta
+    // Ordenar transacciones para la respuesta (más recientes primero)
     const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
 
-    res.json({ 
-      success: true, 
-      transacciones: transaccionesOrdenadas, 
-      saldos: caja.saldos 
+    res.json({
+      success: true,
+      transacciones: transaccionesOrdenadas,
+      saldos: caja.saldos
     });
+
   } catch (error) {
-    console.error('Error al procesar transacción:', error);
-    res.status(500).json({ 
+    console.error('Error detallado:', error);
+    res.status(500).json({
       success: false,
-      message: 'Error al procesar la transacción', 
-      error: error.message 
+      message: 'Error interno del servidor',
+      error: error.message
     });
   }
 });
