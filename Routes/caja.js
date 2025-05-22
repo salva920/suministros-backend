@@ -140,17 +140,18 @@ router.post('/transacciones', async (req, res) => {
       .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
     
     const saldoAnterior = ultimaTransaccion ? ultimaTransaccion.saldo : 0;
+    const montoNumerico = parseFloat(monto);
     
     const nuevaTransaccion = {
       fecha: formatDateToUTC(fecha),
       concepto,
       moneda,
-      entrada: tipo === 'entrada' ? parseFloat(monto) : 0,
-      salida: tipo === 'salida' ? parseFloat(monto) : 0,
+      entrada: tipo === 'entrada' ? montoNumerico : 0,
+      salida: tipo === 'salida' ? montoNumerico : 0,
       tasaCambio: parseFloat(tasaCambio),
       saldo: tipo === 'entrada' ? 
-        saldoAnterior + parseFloat(monto) : 
-        saldoAnterior - parseFloat(monto)
+        saldoAnterior + montoNumerico : 
+        saldoAnterior - montoNumerico
     };
 
     // Actualizar saldos
@@ -166,13 +167,29 @@ router.post('/transacciones', async (req, res) => {
       { new: true }
     );
 
-    // Usar la nueva función de ordenamiento
+    // Recalcular todos los saldos para asegurar consistencia
     const transaccionesOrdenadas = ordenarTransacciones(updated.transacciones);
+    const saldosRecalculados = { USD: 0, Bs: 0 };
+    
+    // Calcular saldos por moneda
+    transaccionesOrdenadas.forEach(t => {
+      if (t.moneda === 'USD') {
+        saldosRecalculados.USD += t.entrada - t.salida;
+      } else if (t.moneda === 'Bs') {
+        saldosRecalculados.Bs += t.entrada - t.salida;
+      }
+    });
+
+    // Actualizar los saldos recalculados
+    await Caja.findOneAndUpdate(
+      { _id: caja._id },
+      { $set: { saldos: saldosRecalculados } }
+    );
 
     res.json({
       success: true,
       transacciones: transaccionesOrdenadas,
-      saldos: updated.saldos
+      saldos: saldosRecalculados
     });
   } catch (error) {
     res.status(500).json({ 
