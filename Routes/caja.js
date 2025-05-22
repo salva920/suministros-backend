@@ -133,25 +133,15 @@ router.post('/transacciones', async (req, res) => {
     }
 
     const { fecha, concepto, moneda, tipo, monto, tasaCambio } = req.body;
-    const montoNumerico = parseFloat(monto);
-    
-    // Obtener el último saldo para esta moneda
-    const ultimaTransaccion = caja.transacciones
-      .filter(t => t.moneda === moneda)
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
-    
-    const saldoAnterior = ultimaTransaccion ? ultimaTransaccion.saldo : 0;
     
     const nuevaTransaccion = {
       fecha: formatDateToUTC(fecha),
       concepto,
       moneda,
-      entrada: tipo === 'entrada' ? montoNumerico : 0,
-      salida: tipo === 'salida' ? montoNumerico : 0,
+      entrada: tipo === 'entrada' ? parseFloat(monto) : 0,
+      salida: tipo === 'salida' ? parseFloat(monto) : 0,
       tasaCambio: parseFloat(tasaCambio),
-      saldo: tipo === 'entrada' ? 
-        saldoAnterior + montoNumerico : 
-        saldoAnterior - montoNumerico
+      saldo: caja.saldos[moneda] + (tipo === 'entrada' ? parseFloat(monto) : -parseFloat(monto))
     };
 
     // Actualizar saldos
@@ -167,29 +157,13 @@ router.post('/transacciones', async (req, res) => {
       { new: true }
     );
 
-    // Recalcular todos los saldos para asegurar consistencia
+    // Usar la nueva función de ordenamiento
     const transaccionesOrdenadas = ordenarTransacciones(updated.transacciones);
-    const saldosRecalculados = { USD: 0, Bs: 0 };
-    
-    // Calcular saldos por moneda
-    transaccionesOrdenadas.forEach(t => {
-      if (t.moneda === 'USD') {
-        saldosRecalculados.USD += t.entrada - t.salida;
-      } else if (t.moneda === 'Bs') {
-        saldosRecalculados.Bs += t.entrada - t.salida;
-      }
-    });
-
-    // Actualizar los saldos recalculados
-    await Caja.findOneAndUpdate(
-      { _id: caja._id },
-      { $set: { saldos: saldosRecalculados } }
-    );
 
     res.json({
       success: true,
       transacciones: transaccionesOrdenadas,
-      saldos: saldosRecalculados
+      saldos: updated.saldos
     });
   } catch (error) {
     res.status(500).json({ 
