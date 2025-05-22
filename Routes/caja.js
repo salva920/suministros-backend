@@ -152,6 +152,12 @@ router.post('/transacciones', async (req, res) => {
       saldos: { USD: 0, Bs: 0 }
     });
 
+    // Asegurar que todas las transacciones existentes tengan tasaCambio
+    caja.transacciones = caja.transacciones.map(t => ({
+      ...t,
+      tasaCambio: t.tasaCambio || tasaCambioNumerica // Usar la nueva tasa si no existe
+    }));
+
     // Agregar nueva transacción
     caja.transacciones.push(nuevaTransaccion);
     
@@ -163,7 +169,7 @@ router.post('/transacciones', async (req, res) => {
     caja.transacciones.forEach((t, index) => {
       if (t.moneda === 'USD' || t.moneda === 'Bs') {
         saldos[t.moneda] += t.entrada - t.salida;
-        caja.transacciones[index].saldo = saldos[t.moneda]; // Actualizar saldo en cada transacción
+        caja.transacciones[index].saldo = saldos[t.moneda];
       }
     });
 
