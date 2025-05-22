@@ -134,6 +134,13 @@ router.post('/transacciones', async (req, res) => {
 
     const { fecha, concepto, moneda, tipo, monto, tasaCambio } = req.body;
     
+    // Obtener el último saldo para esta moneda
+    const ultimaTransaccion = caja.transacciones
+      .filter(t => t.moneda === moneda)
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
+    
+    const saldoAnterior = ultimaTransaccion ? ultimaTransaccion.saldo : 0;
+    
     const nuevaTransaccion = {
       fecha: formatDateToUTC(fecha),
       concepto,
@@ -141,7 +148,9 @@ router.post('/transacciones', async (req, res) => {
       entrada: tipo === 'entrada' ? parseFloat(monto) : 0,
       salida: tipo === 'salida' ? parseFloat(monto) : 0,
       tasaCambio: parseFloat(tasaCambio),
-      saldo: caja.saldos[moneda] + (tipo === 'entrada' ? parseFloat(monto) : -parseFloat(monto))
+      saldo: tipo === 'entrada' ? 
+        saldoAnterior + parseFloat(monto) : 
+        saldoAnterior - parseFloat(monto)
     };
 
     // Actualizar saldos
