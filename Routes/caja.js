@@ -32,90 +32,66 @@ const validateTransaction = (data) => {
   });
 };
 
-// Función de ordenamiento común para todos los endpoints
-const ordenarTransacciones = (transacciones) => {
-  return transacciones.sort((a, b) => {
-    // Primero comparar por fecha (descendente)
-    const dateDiff = new Date(b.fecha) - new Date(a.fecha);
-    if (dateDiff !== 0) return dateDiff;
-    
-    // Si es el mismo día, ordenar por timestamp del ID (ascendente)
-    return b._id.getTimestamp() - a._id.getTimestamp();
-  });
-};
-
-// Obtener una transacción específica
-router.get('/transacciones/:id', async (req, res) => {
-  try {
-    // Validar que el ID sea un ObjectId válido
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'ID de transacción inválido'
-      });
-    }
-
-    const caja = await Caja.findOne({ 
-      'transacciones._id': new mongoose.Types.ObjectId(req.params.id) 
-    });
-
-    if (!caja) {
-      return res.status(404).json({
-        success: false,
-        message: 'No se encontró la caja con esta transacción'
-      });
-    }
-
-    const transaccion = caja.transacciones.find(t => t._id.toString() === req.params.id);
-
-    if (!transaccion) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transacción no encontrada'
-      });
-    }
-
-    res.json({
-      success: true,
-      transaccion
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error al obtener la transacción',
-      error: error.message
-    });
-  }
-});
-
-// Obtener caja con transacciones ordenadas
+// Obtener caja con transacciones ordenadas y paginadas
 router.get('/', async (req, res) => {
   try {
+    const { page = 1, limit = 50, moneda } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Construir el pipeline de agregación
+    const pipeline = [
+      {
+        $facet: {
+          transacciones: [
+            { $sort: { fecha: -1, _id: -1 } },
+            { $skip: skip },
+            { $limit: parseInt(limit) }
+          ],
+          total: [
+            { $count: 'count' }
+          ],
+          saldos: [
+            {
+              $group: {
+                _id: '$moneda',
+                entradas: { $sum: '$entrada' },
+                salidas: { $sum: '$salida' }
+              }
+            }
+          ]
+        }
+      }
+    ];
+
+    // Agregar filtro por moneda si se especifica
+    if (moneda && moneda !== 'TODAS') {
+      pipeline.unshift({
+        $match: { moneda }
+      });
+    }
+
     const caja = await Caja.findOne() || 
       await Caja.create({ transacciones: [], saldos: { USD: 0, Bs: 0 }});
-    
-    // Calcular resumen de operaciones
-    let resumen = {
-      USD: { entradas: 0, salidas: 0, saldo: 0 },
-      Bs: { entradas: 0, salidas: 0, saldo: 0 }
+
+    const [result] = await Caja.aggregate(pipeline);
+
+    // Calcular saldos finales
+    const saldos = {
+      USD: 0,
+      Bs: 0
     };
 
-    caja.transacciones.forEach(t => {
-      if (t.moneda === 'USD' || t.moneda === 'Bs') {
-        resumen[t.moneda].entradas += t.entrada;
-        resumen[t.moneda].salidas += t.salida;
-        resumen[t.moneda].saldo = resumen[t.moneda].entradas - resumen[t.moneda].salidas;
-      }
+    result.saldos.forEach(s => {
+      saldos[s._id] = s.entradas - s.salidas;
     });
-    
-    // Usar la nueva función de ordenamiento
-    const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
 
     res.json({
       success: true,
-      transacciones: transaccionesOrdenadas,
-      saldos: caja.saldos,
-      id: caja._id
+      transacciones: result.transacciones,
+      saldos,
+      total: result.total[0]?.count || 0,
+      totalPages: Math.ceil((result.total[0]?.count || 0) / limit),
+      currentPage: parseInt(page)
     });
   } catch (error) {
     res.status(500).json({ 
@@ -166,12 +142,6 @@ router.post('/transacciones', async (req, res) => {
       saldos: { USD: 0, Bs: 0 }
     });
 
-    // Asegurar que todas las transacciones existentes tengan tasaCambio
-    caja.transacciones = caja.transacciones.map(t => ({
-      ...t,
-      tasaCambio: t.tasaCambio || tasaCambioNumerica
-    }));
-
     // Agregar nueva transacción
     caja.transacciones.push(nuevaTransaccion);
     
@@ -193,12 +163,32 @@ router.post('/transacciones', async (req, res) => {
     // Guardar cambios
     await caja.save();
 
-    // Ordenar transacciones para la respuesta (más recientes primero)
-    const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
+    // Obtener transacciones paginadas para la respuesta
+    const pipeline = [
+      {
+        $facet: {
+          transacciones: [
+            { $sort: { fecha: -1, _id: -1 } },
+            { $limit: 50 }
+          ],
+          saldos: [
+            {
+              $group: {
+                _id: '$moneda',
+                entradas: { $sum: '$entrada' },
+                salidas: { $sum: '$salida' }
+              }
+            }
+          ]
+        }
+      }
+    ];
+
+    const [result] = await Caja.aggregate(pipeline);
 
     res.json({
       success: true,
-      transacciones: transaccionesOrdenadas,
+      transacciones: result.transacciones,
       saldos: caja.saldos
     });
 
@@ -211,42 +201,12 @@ router.post('/transacciones', async (req, res) => {
   }
 });
 
-// Obtener transacciones paginadas
-router.get('/transacciones', async (req, res) => {
-  try {
-    const { page = 1, limit = 10 } = req.query;
-    const caja = await Caja.findOne().lean();
-    
-    if (!caja) return res.status(404).json({ message: 'Caja no encontrada' });
-
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const transacciones = caja.transacciones
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
-      .slice(startIndex, endIndex);
-
-    res.json({
-      transacciones,
-      total: caja.transacciones.length,
-      totalPages: Math.ceil(caja.transacciones.length / limit)
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error al obtener transacciones', error: error.message });
-  }
-});
-
-// Función auxiliar para validar ObjectId
-const isValidObjectId = (id) => {
-  if (!id) return false;
-  return mongoose.Types.ObjectId.isValid(id);
-};
-
 // Actualizar transacción
 router.put('/transacciones/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    if (!isValidObjectId(id)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
         message: 'ID de transacción inválido'
@@ -302,10 +262,32 @@ router.put('/transacciones/:id', async (req, res) => {
     caja.saldos = saldos;
     await caja.save();
 
-    const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
+    // Obtener transacciones paginadas para la respuesta
+    const pipeline = [
+      {
+        $facet: {
+          transacciones: [
+            { $sort: { fecha: -1, _id: -1 } },
+            { $limit: 50 }
+          ],
+          saldos: [
+            {
+              $group: {
+                _id: '$moneda',
+                entradas: { $sum: '$entrada' },
+                salidas: { $sum: '$salida' }
+              }
+            }
+          ]
+        }
+      }
+    ];
+
+    const [result] = await Caja.aggregate(pipeline);
+
     res.json({ 
       success: true, 
-      transacciones: transaccionesOrdenadas, 
+      transacciones: result.transacciones, 
       saldos: caja.saldos 
     });
   } catch (error) {
@@ -322,7 +304,7 @@ router.delete('/transacciones/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    if (!isValidObjectId(id)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
         message: 'ID de transacción inválido'
@@ -349,10 +331,32 @@ router.delete('/transacciones/:id', async (req, res) => {
     caja.saldos = saldos;
     await caja.save();
 
-    const transaccionesOrdenadas = ordenarTransacciones(caja.transacciones);
+    // Obtener transacciones paginadas para la respuesta
+    const pipeline = [
+      {
+        $facet: {
+          transacciones: [
+            { $sort: { fecha: -1, _id: -1 } },
+            { $limit: 50 }
+          ],
+          saldos: [
+            {
+              $group: {
+                _id: '$moneda',
+                entradas: { $sum: '$entrada' },
+                salidas: { $sum: '$salida' }
+              }
+            }
+          ]
+        }
+      }
+    ];
+
+    const [result] = await Caja.aggregate(pipeline);
+
     res.json({ 
       success: true, 
-      transacciones: transaccionesOrdenadas, 
+      transacciones: result.transacciones, 
       saldos: caja.saldos 
     });
   } catch (error) {
@@ -364,4 +368,4 @@ router.delete('/transacciones/:id', async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = router; 
