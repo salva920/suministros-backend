@@ -106,7 +106,7 @@ router.post('/', async (req, res) => {
 // Obtener todos los productos con paginación
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 10, busqueda } = req.query;
+    const { page = 1, limit = 1000, busqueda } = req.query;
     const filtro = {};
     if (busqueda) {
       filtro.$or = [
