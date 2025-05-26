@@ -265,7 +265,7 @@ router.put('/transacciones/:id', async (req, res) => {
     let caja = await Caja.findOne();
     if (!caja) {
       return res.status(404).json({ 
-        success: 
+        success: false,
         message: 'Caja no encontrada' 
       });
     }
