@@ -403,11 +403,13 @@ router.put('/:id', async (req, res) => {
     const montoAbonado = parseFloat(req.body.montoAbonado || 0);
     const total = parseFloat(req.body.total || venta.total);
     const saldoPendiente = parseFloat(req.body.saldoPendiente || 0);
+    const fecha = req.body.fecha ? new Date(req.body.fecha) : venta.fecha;
 
     console.log('Montos normalizados:', {
       montoAbonado,
       total,
       saldoPendiente,
+      fecha,
       tipoMontoAbonado: typeof montoAbonado,
       tipoTotal: typeof total
     });
@@ -427,11 +429,13 @@ router.put('/:id', async (req, res) => {
     venta.montoAbonado = montoAbonado;
     venta.saldoPendiente = saldoPendiente;
     venta.estadoCredito = saldoPendiente > 0 ? 'vigente' : 'pagado';
+    venta.fecha = fecha;
 
     console.log('Datos actualizados:', {
       nuevoMontoAbonado: venta.montoAbonado,
       nuevoSaldoPendiente: venta.saldoPendiente,
-      nuevoEstadoCredito: venta.estadoCredito
+      nuevoEstadoCredito: venta.estadoCredito,
+      nuevaFecha: venta.fecha
     });
 
     // Guardar cambios
@@ -453,7 +457,8 @@ router.put('/:id', async (req, res) => {
       id: venta._id,
       montoAbonado: venta.montoAbonado,
       saldoPendiente: venta.saldoPendiente,
-      estadoCredito: venta.estadoCredito
+      estadoCredito: venta.estadoCredito,
+      fecha: venta.fecha
     });
 
     await session.commitTransaction();
@@ -474,7 +479,7 @@ router.put('/:id', async (req, res) => {
     session.endSession();
     console.log('=== Fin de actualización de venta ===');
   }
-});
+}); 
 
 // Eliminar una venta (DELETE /api/ventas/:id)
 router.delete('/:id', async (req, res) => {
