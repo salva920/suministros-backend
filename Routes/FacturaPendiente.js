@@ -76,29 +76,52 @@ router.get('/', async (req, res) => {
 });
 
 // Crear una nueva factura pendiente
-router.post('/', async (req, res) => {
-  const { fecha, concepto, proveedor, numeroFactura, monto } = req.body;
+router.post('/:id/abonos', async (req, res) => {
+  const { monto, moneda, tasaCambio } = req.body;
+  const facturaId = req.params.id;
 
-  if (!concepto || !monto) {
-    return res.status(400).json({ message: 'Concepto y monto son requeridos' });
+  if (!monto || monto <= 0) {
+    return res.status(400).json({ message: 'Monto inválido' });
+  }
+
+  if (!moneda || !['Bs', 'USD'].includes(moneda)) {
+    return res.status(400).json({ message: 'Moneda inválida. Debe ser Bs o USD' });
+  }
+
+  if (!tasaCambio || tasaCambio <= 0) {
+    return res.status(400).json({ message: 'Tasa de cambio inválida' });
   }
 
   try {
-    const nuevaFactura = new FacturaPendiente({
-      fecha: fecha || new Date(),
-      concepto,
-      proveedor,
-      numeroFactura,
-      monto
-    });
+    const factura = await FacturaPendiente.findById(facturaId);
     
-    await nuevaFactura.save();
-    res.status(201).json(nuevaFactura);
+    if (!factura) {
+      return res.status(404).json({ message: 'Factura no encontrada' });
+    }
+
+    // Convertir el monto a Bs si es necesario
+    const montoEnBs = moneda === 'Bs' ? monto : monto * tasaCambio;
+    const saldoEnBs = factura.saldo;
+    
+    // Redondear a 2 decimales para evitar problemas de precisión
+    const montoFinal = Math.round(montoEnBs * 100) / 100;
+    
+    if (montoFinal > saldoEnBs) {
+      return res.status(400).json({ 
+        message: `El abono supera el saldo. Saldo disponible: ${saldoEnBs} Bs (${(saldoEnBs/tasaCambio).toFixed(2)} USD)`
+      });
+    }
+    
+    factura.abono += montoFinal;
+    factura.monedaAbono = moneda;
+    await factura.save();
+    
+    res.status(200).json(factura);
   } catch (error) {
-    console.error('Error al crear factura pendiente:', error);
-    res.status(500).json({ message: 'Error al crear la factura pendiente' });
+    console.error('Error al registrar abono:', error);
+    res.status(500).json({ message: 'Error al registrar el abono' });
   }
-});
+}); 
 
 // Registrar un abono
 router.post('/:id/abonos', async (req, res) => {
