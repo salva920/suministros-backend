@@ -1,5 +1,6 @@
 const express = require('express');
 const FacturaPendiente = require('../models/FacturaPendiente');
+const Decimal = require('decimal.js');
 const router = express.Router();
 
 // Obtener facturas pendientes con paginación
@@ -105,49 +106,57 @@ router.post('/:id/abonos', async (req, res) => {
   const { monto, moneda, tasaCambio } = req.body;
   const facturaId = req.params.id;
 
-  if (!monto || monto <= 0) {
-    return res.status(400).json({ message: 'Monto inválido' });
-  }
-
-  if (!moneda || !['Bs', 'USD'].includes(moneda)) {
-    return res.status(400).json({ message: 'Moneda inválida. Debe ser Bs o USD' });
-  }
-
-  if (!tasaCambio || tasaCambio <= 0) {
-    return res.status(400).json({ message: 'Tasa de cambio inválida' });
-  }
-
   try {
+    // Validaciones mejoradas
+    if (!monto || isNaN(monto) || new Decimal(monto).lte(0)) {
+      return res.status(400).json({ message: 'Monto inválido' });
+    }
+
+    if (!moneda || !['Bs', 'USD'].includes(moneda)) {
+      return res.status(400).json({ message: 'Moneda inválida. Debe ser Bs o USD' });
+    }
+
+    if (!tasaCambio || isNaN(tasaCambio) || new Decimal(tasaCambio).lte(0)) {
+      return res.status(400).json({ message: 'Tasa de cambio inválida' });
+    }
+
     const factura = await FacturaPendiente.findById(facturaId);
-    
     if (!factura) {
       return res.status(404).json({ message: 'Factura no encontrada' });
     }
 
-    // Convertir el monto a Bs si es necesario
-    const montoEnBs = moneda === 'Bs' ? monto : monto * tasaCambio;
-    const saldoEnBs = factura.saldo;
+    // Convertir a Decimal.js para precisión
+    const montoDecimal = new Decimal(monto);
+    const tasaCambioDecimal = new Decimal(tasaCambio);
+    const saldoDecimal = new Decimal(factura.saldo.toFixed(2));
 
-    // Usar una comparación con tolerancia decimal
-    if (montoEnBs > saldoEnBs + 0.0099) { // Tolerancia de 0.01
-      return res.status(400).json({ 
-        message: `El abono supera el saldo. Saldo disponible: ${saldoEnBs.toFixed(2)} Bs (${(saldoEnBs/tasaCambio).toFixed(2)} USD)`
+    // Calcular monto en Bs
+    const montoEnBs = moneda === 'Bs' 
+      ? montoDecimal 
+      : montoDecimal.times(tasaCambioDecimal);
+
+    // Redondear a 2 decimales
+    const montoFinal = montoEnBs.toDecimalPlaces(2);
+
+    // Comparación con tolerancia
+    if (montoFinal.gt(saldoDecimal.plus(0.0099))) {
+      const saldoUSD = saldoDecimal.dividedBy(tasaCambioDecimal).toDecimalPlaces(2);
+      return res.status(400).json({
+        message: `El abono supera el saldo. Saldo disponible: ${saldoDecimal.toFixed(2)} Bs ($${saldoUSD})`
       });
     }
 
-    // Redondear correctamente
-    const montoFinal = Math.round(montoEnBs * 100) / 100;
-    
-    factura.abono += montoFinal;
+    // Actualizar con precisión decimal
+    factura.abono = new Decimal(factura.abono).plus(montoFinal).toNumber();
     factura.monedaAbono = moneda;
     await factura.save();
-    
+
     res.status(200).json(factura);
   } catch (error) {
     console.error('Error al registrar abono:', error);
     res.status(500).json({ message: 'Error al registrar el abono' });
   }
-});
+}); 
 
 // Eliminar una factura pendiente
 router.delete('/:id', async (req, res) => {

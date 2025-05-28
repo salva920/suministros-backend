@@ -46,7 +46,9 @@ const facturaPendienteSchema = new Schema({
 
 // Middleware para actualizar saldo automáticamente
 facturaPendienteSchema.pre('save', function(next) {
-  this.saldo = Math.max(0, this.monto - this.abono);
+  const abono = new Decimal(this.abono).toDecimalPlaces(2);
+  const monto = new Decimal(this.monto).toDecimalPlaces(2);
+  this.saldo = monto.minus(abono).toNumber();
   next();
 });
 
