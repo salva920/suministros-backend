@@ -31,6 +31,11 @@ const facturaPendienteSchema = new Schema({
     default: 0,
     min: 0
   },
+  monedaAbono: {
+    type: String,
+    enum: ['Bs', 'USD'],
+    default: 'Bs'
+  },
   saldo: {
     type: Number,
     default: function() {
@@ -48,4 +53,4 @@ facturaPendienteSchema.pre('save', function(next) {
 // Aplicar el plugin de paginación
 facturaPendienteSchema.plugin(mongoosePaginate);
 
-module.exports = mongoose.model('FacturaPendiente', facturaPendienteSchema);
+module.exports = mongoose.model('FacturaPendiente', facturaPendienteSchema); 

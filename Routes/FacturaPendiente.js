@@ -102,11 +102,15 @@ router.post('/', async (req, res) => {
 
 // Registrar un abono
 router.post('/:id/abonos', async (req, res) => {
-  const { monto } = req.body;
+  const { monto, moneda, tasaCambio } = req.body;
   const facturaId = req.params.id;
 
   if (!monto || monto <= 0) {
     return res.status(400).json({ message: 'Monto inválido' });
+  }
+
+  if (!moneda || !['Bs', 'USD'].includes(moneda)) {
+    return res.status(400).json({ message: 'Moneda inválida. Debe ser Bs o USD' });
   }
 
   try {
@@ -115,12 +119,16 @@ router.post('/:id/abonos', async (req, res) => {
     if (!factura) {
       return res.status(404).json({ message: 'Factura no encontrada' });
     }
+
+    // Convertir el monto a Bs si es necesario
+    const montoEnBs = moneda === 'Bs' ? monto : monto * tasaCambio;
     
-    if (monto > factura.saldo) {
+    if (montoEnBs > factura.saldo) {
       return res.status(400).json({ message: 'El abono supera el saldo' });
     }
     
-    factura.abono += parseFloat(monto);
+    factura.abono += parseFloat(montoEnBs);
+    factura.monedaAbono = moneda;
     await factura.save();
     
     res.status(200).json(factura);
@@ -128,8 +136,7 @@ router.post('/:id/abonos', async (req, res) => {
     console.error('Error al registrar abono:', error);
     res.status(500).json({ message: 'Error al registrar el abono' });
   }
-});
-
+}); 
 // Eliminar una factura pendiente
 router.delete('/:id', async (req, res) => {
   try {
