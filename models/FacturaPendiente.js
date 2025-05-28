@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const mongoosePaginate = require('mongoose-paginate-v2');
+const Decimal = require('decimal.js');
 const Schema = mongoose.Schema;
 
 const facturaPendienteSchema = new Schema({
@@ -46,9 +47,9 @@ const facturaPendienteSchema = new Schema({
 
 // Middleware para actualizar saldo automáticamente
 facturaPendienteSchema.pre('save', function(next) {
-  const abono = new Decimal(this.abono).toDecimalPlaces(2);
-  const monto = new Decimal(this.monto).toDecimalPlaces(2);
-  this.saldo = monto.minus(abono).toNumber();
+  const montoDecimal = new Decimal(this.monto);
+  const abonoDecimal = new Decimal(this.abono);
+  this.saldo = Math.max(0, montoDecimal.minus(abonoDecimal).toNumber());
   next();
 });
 
