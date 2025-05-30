@@ -17,7 +17,6 @@ router.get('/', async (req, res) => {
       getAll = false
     } = req.query;
 
-    console.log('Parámetros recibidos:', { tipo, getAll, search, startDate, endDate });
 
     // Validar tipo de operación
     const tiposValidos = ['entrada', 'salida', 'creacion', 'ajuste', 'eliminacion'];
@@ -69,7 +68,6 @@ router.get('/', async (req, res) => {
       }
     }
 
-    console.log('Query construida:', JSON.stringify(query, null, 2));
 
     let result;
     if (getAll === 'true') {
@@ -80,9 +78,6 @@ router.get('/', async (req, res) => {
         .select('-__v')
         .lean();
 
-      console.log('Total de registros encontrados:', historial.length);
-      console.log('Primer registro:', historial[0]);
-      console.log('Último registro:', historial[historial.length - 1]);
 
       result = {
         docs: historial,
@@ -114,14 +109,6 @@ router.get('/', async (req, res) => {
         } 
       }
     ]);
-
-    console.log('Respuesta enviada:', {
-      totalRegistros: result.docs.length,
-      totalDocs: result.totalDocs,
-      totalPages: result.totalPages,
-      primerRegistro: result.docs[0],
-      ultimoRegistro: result.docs[result.docs.length - 1]
-    });
 
     res.json({
       historial: result.docs,
