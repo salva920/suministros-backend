@@ -257,7 +257,8 @@ router.get('/', async (req, res) => {
       tipoPago,
       fechaInicio,
       fechaFin,
-      saldoPendiente
+      saldoPendiente,
+      getAll = false // Nuevo parámetro para obtener todos los registros
     } = req.query;
 
     // Validar parámetros
@@ -305,23 +306,48 @@ router.get('/', async (req, res) => {
       }
     }
 
-    const options = {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: { [sort]: order === 'asc' ? 1 : -1 },
-      populate: [
-        { 
-          path: 'cliente', 
-          select: 'nombre rif telefono email direccion municipio'
-        },
-        { 
-          path: 'productos.producto',
-          select: 'nombre costoFinal'
-        }
-      ]
-    };
+    let result;
+    if (getAll === 'true') {
+      // Si getAll es true, obtener todos los registros sin paginación
+      const ventas = await Venta.find(query)
+        .sort({ [sort]: order === 'asc' ? 1 : -1 })
+        .populate([
+          { 
+            path: 'cliente', 
+            select: 'nombre rif telefono email direccion municipio'
+          },
+          { 
+            path: 'productos.producto',
+            select: 'nombre costoFinal'
+          }
+        ]);
 
-    const result = await Venta.paginate(query, options);
+      result = {
+        docs: ventas,
+        totalDocs: ventas.length,
+        totalPages: 1,
+        page: 1
+      };
+    } else {
+      // Usar paginación normal
+      const options = {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        sort: { [sort]: order === 'asc' ? 1 : -1 },
+        populate: [
+          { 
+            path: 'cliente', 
+            select: 'nombre rif telefono email direccion municipio'
+          },
+          { 
+            path: 'productos.producto',
+            select: 'nombre costoFinal'
+          }
+        ]
+      };
+
+      result = await Venta.paginate(query, options);
+    }
 
     // Calcular totales
     const totales = await Venta.aggregate([
@@ -349,7 +375,7 @@ router.get('/', async (req, res) => {
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
-});
+}); 
 
 // Obtener una venta por ID (GET /api/ventas/:id)
 router.get('/:id', async (req, res) => {
