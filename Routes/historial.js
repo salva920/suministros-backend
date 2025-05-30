@@ -157,25 +157,6 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     }
     console.log('Producto encontrado:', productoExiste.nombre);
 
-    console.log('Buscando entrada del 19 de enero...');
-    const ultimaEntrada = await Historial.findOne({
-      producto: productoId,
-      operacion: { $in: ['creacion', 'entrada'] },
-      fecha: new Date('2025-01-19T00:00:00.000+00:00')
-    })
-    .lean()
-    .session(session);
-
-    if (!ultimaEntrada) {
-      throw new Error('No se encontró la entrada del 19 de enero');
-    }
-
-    console.log('Entrada encontrada:', {
-      fecha: ultimaEntrada.fecha,
-      stockNuevo: ultimaEntrada.stockNuevo,
-      operacion: ultimaEntrada.operacion
-    });
-
     console.log('Buscando salidas posteriores al 27 de mayo...');
     const salidas = await Historial.find({
       producto: productoId,
@@ -187,14 +168,45 @@ router.post('/corregir-inconsistencia', async (req, res) => {
 
     console.log(`Encontradas ${salidas.length} salidas para corregir`);
 
-    let stockActual = ultimaEntrada.stockNuevo;
-    console.log('Stock inicial:', stockActual);
-
-    // Verificar que hay suficiente stock para todas las salidas
+    // Calcular el total de salidas
     const totalSalidas = salidas.reduce((sum, salida) => sum + salida.cantidad, 0);
-    if (totalSalidas > stockActual) {
-      throw new Error(`Stock insuficiente. Stock actual: ${stockActual}, Total salidas: ${totalSalidas}`);
+    console.log('Total de salidas:', totalSalidas);
+
+    // Obtener la última salida para saber el stock final deseado
+    const ultimaSalida = salidas[salidas.length - 1];
+    const stockFinalDeseado = ultimaSalida.stockNuevo;
+    console.log('Stock final deseado:', stockFinalDeseado);
+
+    // Calcular el stock inicial necesario
+    const stockInicialNecesario = totalSalidas + stockFinalDeseado;
+    console.log('Stock inicial necesario:', stockInicialNecesario);
+
+    // Buscar la entrada del 19 de enero
+    console.log('Buscando entrada del 19 de enero...');
+    const ultimaEntrada = await Historial.findOne({
+      producto: productoId,
+      operacion: { $in: ['creacion', 'entrada'] },
+      fecha: new Date('2025-01-19T00:00:00.000+00:00')
+    })
+    .session(session);
+
+    if (!ultimaEntrada) {
+      throw new Error('No se encontró la entrada del 19 de enero');
     }
+
+    // Actualizar el stock de la entrada inicial
+    ultimaEntrada.stockNuevo = stockInicialNecesario;
+    ultimaEntrada.detalles = `Ajuste de stock inicial para corregir inconsistencias - Stock anterior: ${ultimaEntrada.stockNuevo}`;
+    await ultimaEntrada.save({ session });
+
+    console.log('Entrada actualizada:', {
+      fecha: ultimaEntrada.fecha,
+      stockNuevo: ultimaEntrada.stockNuevo,
+      operacion: ultimaEntrada.operacion
+    });
+
+    let stockActual = stockInicialNecesario;
+    console.log('Stock inicial ajustado:', stockActual);
 
     // Corregir cada salida
     for (const salida of salidas) {
@@ -205,11 +217,6 @@ router.post('/corregir-inconsistencia', async (req, res) => {
         stockAnterior: salida.stockAnterior,
         stockNuevo: salida.stockNuevo
       });
-
-      // Verificar que hay suficiente stock para esta salida
-      if (salida.cantidad > stockActual) {
-        throw new Error(`Stock insuficiente para la salida del ${salida.fecha}. Stock actual: ${stockActual}, Cantidad: ${salida.cantidad}`);
-      }
 
       salida.stockAnterior = stockActual;
       salida.stockNuevo = stockActual - salida.cantidad;
@@ -223,11 +230,6 @@ router.post('/corregir-inconsistencia', async (req, res) => {
         stockNuevo: salida.stockNuevo,
         stockActual
       });
-    }
-
-    // Verificar que el stock final no es negativo
-    if (stockActual < 0) {
-      throw new Error(`El stock final no puede ser negativo. Stock calculado: ${stockActual}`);
     }
 
     // Actualizar el stock del producto
@@ -246,9 +248,14 @@ router.post('/corregir-inconsistencia', async (req, res) => {
 
     res.json({ 
       message: 'Inconsistencia corregida exitosamente',
-      ultimaEntrada: ultimaEntrada.stockNuevo,
+      stockInicial: stockInicialNecesario,
       stockFinal: stockActual,
-      salidasCorregidas: salidas.length
+      salidasCorregidas: salidas.length,
+      detalles: {
+        totalSalidas,
+        stockFinalDeseado,
+        stockInicialAjustado: stockInicialNecesario
+      }
     });
 
   } catch (error) {
