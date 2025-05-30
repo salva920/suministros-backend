@@ -130,23 +130,34 @@ router.get('/', async (req, res) => {
 
 // Ruta para corregir inconsistencia en historial
 router.post('/corregir-inconsistencia', async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
+  console.log('Recibida petición de corrección');
+  console.log('Body recibido:', req.body);
+  
+  let session;
   try {
-    console.log('Iniciando corrección de inconsistencia...');
+    session = await mongoose.startSession();
+    session.startTransaction();
+    console.log('Sesión de MongoDB iniciada');
+
     const { productoId } = req.body;
+    console.log('Producto ID recibido:', productoId);
     
     if (!productoId) {
-      return res.status(400).json({ error: 'ID de producto no proporcionado' });
+      throw new Error('ID de producto no proporcionado');
     }
 
     if (!mongoose.Types.ObjectId.isValid(productoId)) {
-      return res.status(400).json({ error: 'ID de producto inválido' });
+      throw new Error('ID de producto inválido');
     }
 
+    // Verificar que el producto existe
+    const productoExiste = await Producto.findById(productoId).session(session);
+    if (!productoExiste) {
+      throw new Error('Producto no encontrado');
+    }
+    console.log('Producto encontrado:', productoExiste.nombre);
+
     console.log('Buscando entrada del 19 de enero...');
-    // Obtener específicamente la entrada del 19 de enero
     const ultimaEntrada = await Historial.findOne({
       producto: productoId,
       operacion: { $in: ['creacion', 'entrada'] },
@@ -156,8 +167,7 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     .session(session);
 
     if (!ultimaEntrada) {
-      console.error('No se encontró la entrada del 19 de enero');
-      return res.status(404).json({ error: 'No se encontró la entrada del 19 de enero' });
+      throw new Error('No se encontró la entrada del 19 de enero');
     }
 
     console.log('Entrada encontrada:', {
@@ -167,7 +177,6 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     });
 
     console.log('Buscando salidas posteriores al 27 de mayo...');
-    // Obtener todas las salidas después del salto
     const salidas = await Historial.find({
       producto: productoId,
       operacion: 'salida',
@@ -227,14 +236,19 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     });
 
   } catch (error) {
-    await session.abortTransaction();
-    console.error('Error al corregir inconsistencia:', error);
+    console.error('Error detallado:', error);
+    if (session) {
+      await session.abortTransaction();
+    }
     res.status(500).json({ 
       error: 'Error al corregir inconsistencia',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   } finally {
-    session.endSession();
+    if (session) {
+      session.endSession();
+    }
   }
 });
 
