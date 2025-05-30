@@ -293,55 +293,37 @@ router.post('/:id/entradas', async (req, res) => {
   session.startTransaction();
 
   try {
+    console.log('Iniciando entrada de stock...');
+    console.log('ID del producto:', req.params.id);
+    console.log('Datos recibidos:', req.body);
+
     const producto = await Producto.findById(req.params.id).session(session);
     if (!producto) {
-      return res.status(404).json({ message: 'Producto no encontrado' });
+      throw new Error('Producto no encontrado');
     }
     
     const cantidad = Number(req.body.cantidad) || 0;
     if (cantidad <= 0) {
-      return res.status(400).json({ message: 'La cantidad debe ser mayor a 0' });
+      throw new Error('La cantidad debe ser mayor a 0');
     }
     
     const fechaHora = req.body.fechaHora ? new Date(req.body.fechaHora) : new Date();
-
-    // Validar fecha
     if (isNaN(fechaHora.getTime())) {
-      return res.status(400).json({ message: 'Fecha inválida' });
+      throw new Error('Fecha inválida');
     }
 
-    // Solo aplicar la lógica especial para el producto con inconsistencia
-    if (producto._id.toString() === '6834774f5e6ceeeab51f6937') {
-      // Obtener el último registro de entrada para mantener la consistencia
-      const ultimaEntrada = await Historial.findOne({
-        producto: producto._id,
-        operacion: { $in: ['creacion', 'entrada'] },
-        fecha: { $lt: new Date('2025-05-27T14:47:37.757+00:00') }
-      })
-      .sort({ fecha: -1 })
-      .lean()
-      .session(session);
-
-      // Guardar valores anteriores para el historial
-      const stockAnterior = ultimaEntrada ? ultimaEntrada.stockNuevo : 0;
-      const cantidadAnterior = producto.cantidad || 0;
-      
-      // Actualizar tanto stock como cantidad
-      producto.stock = stockAnterior + cantidad;
-      producto.cantidad = cantidadAnterior + cantidad;
-    } else {
-      // Lógica normal para otros productos
-      const stockAnterior = producto.stock || 0;
-      const cantidadAnterior = producto.cantidad || 0;
-      
-      producto.stock = stockAnterior + cantidad;
-      producto.cantidad = cantidadAnterior + cantidad;
-    }
+    // Guardar valores anteriores para el historial
+    const stockAnterior = producto.stock || 0;
+    const cantidadAnterior = producto.cantidad || 0;
+    
+    // Actualizar stock y cantidad
+    producto.stock = stockAnterior + cantidad;
+    producto.cantidad = cantidadAnterior + cantidad;
     
     // Calcular el costo final de la entrada
-    const costoInicial = req.body.costoUnitario || producto.costoInicial || 0;
-    const acarreo = req.body.acarreo || 0;
-    const flete = req.body.flete || 0;
+    const costoInicial = Number(req.body.costoUnitario) || producto.costoInicial || 0;
+    const acarreo = Number(req.body.acarreo) || 0;
+    const flete = Number(req.body.flete) || 0;
     const costoFinalEntrada = ((costoInicial * cantidad) + acarreo + flete) / cantidad;
 
     // Buscar el último lote activo
@@ -355,7 +337,17 @@ router.post('/:id/entradas', async (req, res) => {
     const stockLoteAnterior = ultimoLote?.stockLote || 0;
     const nuevoStockLote = stockLoteAnterior + cantidad;
     
-    // Guardar los cambios
+    console.log('Datos calculados:', {
+      stockAnterior,
+      cantidadAnterior,
+      nuevoStock: producto.stock,
+      nuevaCantidad: producto.cantidad,
+      stockLoteAnterior,
+      nuevoStockLote,
+      costoFinalEntrada
+    });
+
+    // Guardar los cambios en el producto
     await producto.save({ session });
     
     // Registrar en el historial
@@ -379,6 +371,7 @@ router.post('/:id/entradas', async (req, res) => {
     }
 
     await session.commitTransaction();
+    console.log('Entrada de stock completada exitosamente');
     
     res.json({
       producto: producto,
