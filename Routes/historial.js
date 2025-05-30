@@ -140,18 +140,17 @@ router.post('/corregir-inconsistencia', async (req, res) => {
       return res.status(400).json({ error: 'ID de producto inválido' });
     }
 
-    // Obtener la última entrada antes del salto
+    // Obtener específicamente la entrada del 19 de enero
     const ultimaEntrada = await Historial.findOne({
       producto: productoId,
       operacion: { $in: ['creacion', 'entrada'] },
-      fecha: { $lt: new Date('2025-05-27T14:47:37.757+00:00') }
+      fecha: new Date('2025-01-19T00:00:00.000+00:00')
     })
-    .sort({ fecha: -1 })
     .lean()
     .session(session);
 
     if (!ultimaEntrada) {
-      return res.status(404).json({ error: 'No se encontró la última entrada válida' });
+      return res.status(404).json({ error: 'No se encontró la entrada del 19 de enero' });
     }
 
     // Obtener todas las salidas después del salto
@@ -163,7 +162,7 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     .sort({ fecha: 1 })
     .session(session);
 
-    let stockActual = ultimaEntrada.stockNuevo;
+    let stockActual = ultimaEntrada.stockNuevo; // 2182
 
     // Corregir cada salida
     for (const salida of salidas) {
