@@ -190,6 +190,12 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     let stockActual = ultimaEntrada.stockNuevo;
     console.log('Stock inicial:', stockActual);
 
+    // Verificar que hay suficiente stock para todas las salidas
+    const totalSalidas = salidas.reduce((sum, salida) => sum + salida.cantidad, 0);
+    if (totalSalidas > stockActual) {
+      throw new Error(`Stock insuficiente. Stock actual: ${stockActual}, Total salidas: ${totalSalidas}`);
+    }
+
     // Corregir cada salida
     for (const salida of salidas) {
       console.log('Corrigiendo salida:', {
@@ -199,6 +205,11 @@ router.post('/corregir-inconsistencia', async (req, res) => {
         stockAnterior: salida.stockAnterior,
         stockNuevo: salida.stockNuevo
       });
+
+      // Verificar que hay suficiente stock para esta salida
+      if (salida.cantidad > stockActual) {
+        throw new Error(`Stock insuficiente para la salida del ${salida.fecha}. Stock actual: ${stockActual}, Cantidad: ${salida.cantidad}`);
+      }
 
       salida.stockAnterior = stockActual;
       salida.stockNuevo = stockActual - salida.cantidad;
@@ -212,6 +223,11 @@ router.post('/corregir-inconsistencia', async (req, res) => {
         stockNuevo: salida.stockNuevo,
         stockActual
       });
+    }
+
+    // Verificar que el stock final no es negativo
+    if (stockActual < 0) {
+      throw new Error(`El stock final no puede ser negativo. Stock calculado: ${stockActual}`);
     }
 
     // Actualizar el stock del producto
