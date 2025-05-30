@@ -134,12 +134,18 @@ router.post('/corregir-inconsistencia', async (req, res) => {
   session.startTransaction();
 
   try {
+    console.log('Iniciando corrección de inconsistencia...');
     const { productoId } = req.body;
     
+    if (!productoId) {
+      return res.status(400).json({ error: 'ID de producto no proporcionado' });
+    }
+
     if (!mongoose.Types.ObjectId.isValid(productoId)) {
       return res.status(400).json({ error: 'ID de producto inválido' });
     }
 
+    console.log('Buscando entrada del 19 de enero...');
     // Obtener específicamente la entrada del 19 de enero
     const ultimaEntrada = await Historial.findOne({
       producto: productoId,
@@ -150,9 +156,17 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     .session(session);
 
     if (!ultimaEntrada) {
+      console.error('No se encontró la entrada del 19 de enero');
       return res.status(404).json({ error: 'No se encontró la entrada del 19 de enero' });
     }
 
+    console.log('Entrada encontrada:', {
+      fecha: ultimaEntrada.fecha,
+      stockNuevo: ultimaEntrada.stockNuevo,
+      operacion: ultimaEntrada.operacion
+    });
+
+    console.log('Buscando salidas posteriores al 27 de mayo...');
     // Obtener todas las salidas después del salto
     const salidas = await Historial.find({
       producto: productoId,
@@ -162,26 +176,49 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     .sort({ fecha: 1 })
     .session(session);
 
-    let stockActual = ultimaEntrada.stockNuevo; // 2182
+    console.log(`Encontradas ${salidas.length} salidas para corregir`);
+
+    let stockActual = ultimaEntrada.stockNuevo;
+    console.log('Stock inicial:', stockActual);
 
     // Corregir cada salida
     for (const salida of salidas) {
+      console.log('Corrigiendo salida:', {
+        id: salida._id,
+        fecha: salida.fecha,
+        cantidad: salida.cantidad,
+        stockAnterior: salida.stockAnterior,
+        stockNuevo: salida.stockNuevo
+      });
+
       salida.stockAnterior = stockActual;
       salida.stockNuevo = stockActual - salida.cantidad;
       salida.detalles = `Venta #${salida.detalles.split('#')[1]} - Lote anterior: ${stockActual}`;
       
       await salida.save({ session });
       stockActual = salida.stockNuevo;
+
+      console.log('Salida corregida:', {
+        stockAnterior: salida.stockAnterior,
+        stockNuevo: salida.stockNuevo,
+        stockActual
+      });
     }
 
     // Actualizar el stock del producto
     const producto = await Producto.findById(productoId).session(session);
     if (producto) {
+      console.log('Stock del producto antes de actualizar:', producto.stock);
       producto.stock = stockActual;
       await producto.save({ session });
+      console.log('Stock del producto actualizado:', producto.stock);
     }
 
     await session.commitTransaction();
+    console.log('=== Corrección completada exitosamente ===');
+    console.log('Stock final:', stockActual);
+    console.log('Salidas corregidas:', salidas.length);
+
     res.json({ 
       message: 'Inconsistencia corregida exitosamente',
       ultimaEntrada: ultimaEntrada.stockNuevo,
