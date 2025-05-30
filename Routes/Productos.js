@@ -315,7 +315,8 @@ router.post('/:id/entradas', async (req, res) => {
       // Obtener el último registro de entrada para mantener la consistencia
       const ultimaEntrada = await Historial.findOne({
         producto: producto._id,
-        operacion: { $in: ['creacion', 'entrada'] }
+        operacion: { $in: ['creacion', 'entrada'] },
+        fecha: { $lt: new Date('2025-05-27T14:47:37.757+00:00') }
       })
       .sort({ fecha: -1 })
       .lean()
@@ -364,7 +365,7 @@ router.post('/:id/entradas', async (req, res) => {
       codigoProducto: producto.codigo,
       operacion: 'entrada',
       cantidad: cantidad,
-      stockAnterior: producto.stock - cantidad,
+      stockAnterior: stockAnterior,
       stockNuevo: producto.stock,
       fecha: fechaHora,
       stockLote: nuevoStockLote,

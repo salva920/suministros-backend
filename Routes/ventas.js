@@ -108,7 +108,8 @@ router.post('/', async (req, res) => {
         // Obtener el último registro de entrada para mantener la consistencia
         const ultimaEntrada = await Historial.findOne({
           producto: producto._id,
-          operacion: { $in: ['creacion', 'entrada'] }
+          operacion: { $in: ['creacion', 'entrada'] },
+          fecha: { $lt: new Date('2025-05-27T14:47:37.757+00:00') }
         })
         .sort({ fecha: -1 })
         .lean()
@@ -122,7 +123,8 @@ router.post('/', async (req, res) => {
         const lotes = await Historial.find({
           producto: producto._id,
           operacion: { $in: ['creacion', 'entrada'] },
-          stockLote: { $gt: 0 }
+          stockLote: { $gt: 0 },
+          fecha: { $lt: new Date('2025-05-27T14:47:37.757+00:00') }
         })
         .sort({ fecha: 1 })
         .lean()

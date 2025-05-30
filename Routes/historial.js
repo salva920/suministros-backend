@@ -144,7 +144,7 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     const ultimaEntrada = await Historial.findOne({
       producto: productoId,
       operacion: { $in: ['creacion', 'entrada'] },
-      fecha: { $lt: new Date('2025-05-27') }
+      fecha: { $lt: new Date('2025-05-27T14:47:37.757+00:00') }
     })
     .sort({ fecha: -1 })
     .lean()
@@ -158,7 +158,7 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     const salidas = await Historial.find({
       producto: productoId,
       operacion: 'salida',
-      fecha: { $gte: new Date('2025-05-27') }
+      fecha: { $gte: new Date('2025-05-27T14:47:37.757+00:00') }
     })
     .sort({ fecha: 1 })
     .session(session);
@@ -186,7 +186,8 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     res.json({ 
       message: 'Inconsistencia corregida exitosamente',
       ultimaEntrada: ultimaEntrada.stockNuevo,
-      stockFinal: stockActual
+      stockFinal: stockActual,
+      salidasCorregidas: salidas.length
     });
 
   } catch (error) {
