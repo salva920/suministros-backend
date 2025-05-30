@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Historial = require('../models/historial');
 const mongoose = require('mongoose');
+const Producto = require('../models/Producto');
 
 // Obtener historial de operaciones
 router.get('/', async (req, res) => {
@@ -125,5 +126,79 @@ router.get('/', async (req, res) => {
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
-}); 
+});
+
+// Ruta para corregir inconsistencia en historial
+router.post('/corregir-inconsistencia', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { productoId } = req.body;
+    
+    if (!mongoose.Types.ObjectId.isValid(productoId)) {
+      return res.status(400).json({ error: 'ID de producto inválido' });
+    }
+
+    // Obtener la última entrada antes del salto
+    const ultimaEntrada = await Historial.findOne({
+      producto: productoId,
+      operacion: { $in: ['creacion', 'entrada'] },
+      fecha: { $lt: new Date('2025-05-27') }
+    })
+    .sort({ fecha: -1 })
+    .lean()
+    .session(session);
+
+    if (!ultimaEntrada) {
+      return res.status(404).json({ error: 'No se encontró la última entrada válida' });
+    }
+
+    // Obtener todas las salidas después del salto
+    const salidas = await Historial.find({
+      producto: productoId,
+      operacion: 'salida',
+      fecha: { $gte: new Date('2025-05-27') }
+    })
+    .sort({ fecha: 1 })
+    .session(session);
+
+    let stockActual = ultimaEntrada.stockNuevo;
+
+    // Corregir cada salida
+    for (const salida of salidas) {
+      salida.stockAnterior = stockActual;
+      salida.stockNuevo = stockActual - salida.cantidad;
+      salida.detalles = `Venta #${salida.detalles.split('#')[1]} - Lote anterior: ${stockActual}`;
+      
+      await salida.save({ session });
+      stockActual = salida.stockNuevo;
+    }
+
+    // Actualizar el stock del producto
+    const producto = await Producto.findById(productoId).session(session);
+    if (producto) {
+      producto.stock = stockActual;
+      await producto.save({ session });
+    }
+
+    await session.commitTransaction();
+    res.json({ 
+      message: 'Inconsistencia corregida exitosamente',
+      ultimaEntrada: ultimaEntrada.stockNuevo,
+      stockFinal: stockActual
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('Error al corregir inconsistencia:', error);
+    res.status(500).json({ 
+      error: 'Error al corregir inconsistencia',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    session.endSession();
+  }
+});
+
 module.exports = router;

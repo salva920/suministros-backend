@@ -101,64 +101,119 @@ router.post('/', async (req, res) => {
         throw new Error(`Producto no encontrado: ${item.producto}`);
       }
 
-      let cantidadRestante = item.cantidad;
+      // Solo aplicar la lógica especial para el producto con inconsistencia
+      if (producto._id.toString() === '6834774f5e6ceeeab51f6937') {
+        let cantidadRestante = item.cantidad;
 
-      // Optimizar consulta de lotes con índices
-      const lotes = await Historial.find({
-        producto: producto._id,
-        operacion: { $in: ['creacion', 'entrada'] },
-        stockLote: { $gt: 0 }
-      })
-      .sort({ fecha: 1 })
-      .lean()
-      .session(session);
+        // Obtener el último registro de entrada para mantener la consistencia
+        const ultimaEntrada = await Historial.findOne({
+          producto: producto._id,
+          operacion: { $in: ['creacion', 'entrada'] }
+        })
+        .sort({ fecha: -1 })
+        .lean()
+        .session(session);
 
-      // Verificar stock total
-      const stockTotalLotes = lotes.reduce((total, lote) => total + lote.stockLote, 0);
-      if (stockTotalLotes < item.cantidad) {
-        throw new Error(`Stock insuficiente en los lotes para el producto: ${producto.nombre}`);
+        if (!ultimaEntrada) {
+          throw new Error(`No hay registros de entrada para el producto: ${producto.nombre}`);
+        }
+
+        // Optimizar consulta de lotes con índices
+        const lotes = await Historial.find({
+          producto: producto._id,
+          operacion: { $in: ['creacion', 'entrada'] },
+          stockLote: { $gt: 0 }
+        })
+        .sort({ fecha: 1 })
+        .lean()
+        .session(session);
+
+        // Verificar stock total
+        const stockTotalLotes = lotes.reduce((total, lote) => total + lote.stockLote, 0);
+        if (stockTotalLotes < item.cantidad) {
+          throw new Error(`Stock insuficiente en los lotes para el producto: ${producto.nombre}`);
+        }
+
+        // Registrar la salida en el historial
+        const historialSalida = new Historial({
+          producto: producto._id,
+          nombreProducto: producto.nombre,
+          codigoProducto: producto.codigo,
+          operacion: 'salida',
+          cantidad: item.cantidad,
+          stockAnterior: ultimaEntrada.stockNuevo,
+          stockNuevo: ultimaEntrada.stockNuevo - item.cantidad,
+          fecha: new Date(),
+          detalles: `Venta #${venta._id} - Lote anterior: ${ultimaEntrada.stockNuevo}`,
+          stockLote: 0
+        });
+        await historialSalida.save({ session });
+
+        // Descontar de los lotes manteniendo el stockLote
+        for (const lote of lotes) {
+          if (cantidadRestante <= 0) break;
+          const cantidadUsar = Math.min(lote.stockLote, cantidadRestante);
+          
+          await Historial.updateOne(
+            { _id: lote._id },
+            { 
+              $inc: { 
+                stockLote: -cantidadUsar,
+                stockNuevo: -cantidadUsar 
+              }
+            }
+          ).session(session);
+          
+          cantidadRestante -= cantidadUsar;
+        }
+
+        // Actualizar stock del producto
+        producto.stock = historialSalida.stockNuevo;
+        await producto.save({ session });
+      } else {
+        // Lógica normal para otros productos
+        let cantidadRestante = item.cantidad;
+        const lotes = await Historial.find({
+          producto: producto._id,
+          operacion: { $in: ['creacion', 'entrada'] },
+          stockLote: { $gt: 0 }
+        })
+        .sort({ fecha: 1 })
+        .lean()
+        .session(session);
+
+        const stockTotalLotes = lotes.reduce((total, lote) => total + lote.stockLote, 0);
+        if (stockTotalLotes < item.cantidad) {
+          throw new Error(`Stock insuficiente en los lotes para el producto: ${producto.nombre}`);
+        }
+
+        const historialSalida = new Historial({
+          producto: producto._id,
+          nombreProducto: producto.nombre,
+          codigoProducto: producto.codigo,
+          operacion: 'salida',
+          cantidad: item.cantidad,
+          stockAnterior: stockTotalLotes,
+          stockNuevo: stockTotalLotes - item.cantidad,
+          fecha: new Date(),
+          detalles: `Venta #${venta._id}`,
+          stockLote: 0
+        });
+        await historialSalida.save({ session });
+
+        for (const lote of lotes) {
+          if (cantidadRestante <= 0) break;
+          const cantidadUsar = Math.min(lote.stockLote, cantidadRestante);
+          await Historial.updateOne(
+            { _id: lote._id },
+            { $inc: { stockLote: -cantidadUsar } }
+          ).session(session);
+          cantidadRestante -= cantidadUsar;
+        }
+
+        producto.stock = stockTotalLotes - item.cantidad;
+        await producto.save({ session });
       }
-
-      // Registrar la salida en el historial
-      const historialSalida = new Historial({
-        producto: producto._id,
-        nombreProducto: producto.nombre,
-        codigoProducto: producto.codigo,
-        operacion: 'salida',
-        cantidad: item.cantidad,
-        stockAnterior: stockTotalLotes,
-        stockNuevo: stockTotalLotes - item.cantidad,
-        fecha: new Date(),
-        detalles: `Venta #${venta._id}`
-      });
-      await historialSalida.save({ session });
-
-      // Descontar de los lotes
-      for (const lote of lotes) {
-        if (cantidadRestante <= 0) break;
-        const cantidadUsar = Math.min(lote.stockLote, cantidadRestante);
-        
-        await Historial.updateOne(
-          { _id: lote._id },
-          { $inc: { stockLote: -cantidadUsar } }
-        ).session(session);
-        
-        cantidadRestante -= cantidadUsar;
-      }
-
-      // Actualizar stock del producto usando agregación
-      const [stockActual] = await Historial.aggregate([
-        { 
-          $match: { 
-            producto: producto._id,
-            operacion: { $in: ['creacion', 'entrada'] }
-          }
-        },
-        { $group: { _id: null, total: { $sum: "$stockLote" } } }
-      ]).session(session);
-
-      producto.stock = stockActual?.total || 0;
-      await producto.save({ session });
     }
 
     await session.commitTransaction();

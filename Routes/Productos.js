@@ -310,13 +310,32 @@ router.post('/:id/entradas', async (req, res) => {
       return res.status(400).json({ message: 'Fecha inválida' });
     }
 
-    // Guardar valores anteriores para el historial
-    const stockAnterior = producto.stock || 0;
-    const cantidadAnterior = producto.cantidad || 0;
-    
-    // Actualizar tanto stock como cantidad
-    producto.stock = (producto.stock || 0) + cantidad;
-    producto.cantidad = (producto.cantidad || 0) + cantidad;
+    // Solo aplicar la lógica especial para el producto con inconsistencia
+    if (producto._id.toString() === '6834774f5e6ceeeab51f6937') {
+      // Obtener el último registro de entrada para mantener la consistencia
+      const ultimaEntrada = await Historial.findOne({
+        producto: producto._id,
+        operacion: { $in: ['creacion', 'entrada'] }
+      })
+      .sort({ fecha: -1 })
+      .lean()
+      .session(session);
+
+      // Guardar valores anteriores para el historial
+      const stockAnterior = ultimaEntrada ? ultimaEntrada.stockNuevo : 0;
+      const cantidadAnterior = producto.cantidad || 0;
+      
+      // Actualizar tanto stock como cantidad
+      producto.stock = stockAnterior + cantidad;
+      producto.cantidad = cantidadAnterior + cantidad;
+    } else {
+      // Lógica normal para otros productos
+      const stockAnterior = producto.stock || 0;
+      const cantidadAnterior = producto.cantidad || 0;
+      
+      producto.stock = stockAnterior + cantidad;
+      producto.cantidad = cantidadAnterior + cantidad;
+    }
     
     // Calcular el costo final de la entrada
     const costoInicial = req.body.costoUnitario || producto.costoInicial || 0;
@@ -345,7 +364,7 @@ router.post('/:id/entradas', async (req, res) => {
       codigoProducto: producto.codigo,
       operacion: 'entrada',
       cantidad: cantidad,
-      stockAnterior: stockAnterior,
+      stockAnterior: producto.stock - cantidad,
       stockNuevo: producto.stock,
       fecha: fechaHora,
       stockLote: nuevoStockLote,
