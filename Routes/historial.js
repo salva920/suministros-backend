@@ -13,7 +13,8 @@ router.get('/', async (req, res) => {
       startDate,
       endDate,
       tipo = 'entrada',
-      producto
+      producto,
+      getAll = false
     } = req.query;
 
     // Validar tipo de operación
@@ -66,16 +67,31 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Validar y ajustar límites de paginación
-    const limitNum = Math.min(Math.max(parseInt(limit) || 10, 1), 100);
-    const pageNum = Math.max(parseInt(page) || 1, 1);
+    let result;
+    if (getAll === 'true') {
+      // Si getAll es true, obtener todos los registros sin paginación
+      const historial = await Historial.find(query)
+        .sort({ fecha: -1 })
+        .select('-__v');
 
-    const result = await Historial.paginate(query, {
-      page: pageNum,
-      limit: limitNum,
-      sort: { fecha: -1 },
-      select: '-__v'
-    });
+      result = {
+        docs: historial,
+        totalDocs: historial.length,
+        totalPages: 1,
+        page: 1
+      };
+    } else {
+      // Validar y ajustar límites de paginación
+      const limitNum = Math.min(Math.max(parseInt(limit) || 10, 1), 100);
+      const pageNum = Math.max(parseInt(page) || 1, 1);
+
+      result = await Historial.paginate(query, {
+        page: pageNum,
+        limit: limitNum,
+        sort: { fecha: -1 },
+        select: '-__v'
+      });
+    }
 
     // Calcular totales por tipo de operación
     const totales = await Historial.aggregate([
