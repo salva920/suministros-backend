@@ -172,13 +172,12 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     const totalSalidas = salidas.reduce((sum, salida) => sum + salida.cantidad, 0);
     console.log('Total de salidas:', totalSalidas);
 
-    // Obtener la última salida para saber el stock final deseado
-    const ultimaSalida = salidas[salidas.length - 1];
-    const stockFinalDeseado = ultimaSalida.stockNuevo;
+    // Establecer el stock final deseado en 0
+    const stockFinalDeseado = 0;
     console.log('Stock final deseado:', stockFinalDeseado);
 
     // Calcular el stock inicial necesario
-    const stockInicialNecesario = totalSalidas + stockFinalDeseado;
+    const stockInicialNecesario = totalSalidas;
     console.log('Stock inicial necesario:', stockInicialNecesario);
 
     // Buscar la entrada del 19 de enero
@@ -236,7 +235,7 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     const producto = await Producto.findById(productoId).session(session);
     if (producto) {
       console.log('Stock del producto antes de actualizar:', producto.stock);
-      producto.stock = stockActual;
+      producto.stock = stockFinalDeseado; // Establecer en 0
       await producto.save({ session });
       console.log('Stock del producto actualizado:', producto.stock);
     }
@@ -249,7 +248,7 @@ router.post('/corregir-inconsistencia', async (req, res) => {
     res.json({ 
       message: 'Inconsistencia corregida exitosamente',
       stockInicial: stockInicialNecesario,
-      stockFinal: stockActual,
+      stockFinal: stockFinalDeseado,
       salidasCorregidas: salidas.length,
       detalles: {
         totalSalidas,
