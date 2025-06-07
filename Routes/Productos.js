@@ -123,7 +123,7 @@ router.post('/', async (req, res) => {
       stockAnterior: 0,
       stockNuevo: nuevoProducto.stock,
       fecha: nuevoProducto.fechaIngreso,
-      stockLote: nuevoProducto.cantidad,
+      stockLote: Number(nuevoProducto.cantidad),
       costoFinal: nuevoProducto.costoFinal,
       detalles: `Creación de producto - Cantidad inicial: ${nuevoProducto.cantidad}`
     };
@@ -432,7 +432,7 @@ router.post('/:id/entradas', async (req, res) => {
       stockAnterior: stockAnterior,
       stockNuevo: producto.stock,
       fecha: fechaHora,
-      stockLote: cantidad,
+      stockLote: Number(cantidad),
       costoFinal: costoFinalEntrada,
       detalles: `Entrada de stock - Cantidad: ${cantidad}`
     };
