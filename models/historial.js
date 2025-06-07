@@ -153,7 +153,8 @@ historialSchema.pre('save', function(next) {
 
         // Validar que el stockLote sea consistente con la operación
         if (this.stockLote === 0) {
-          console.log('Advertencia: stockLote es 0 en operación de salida');
+          console.log('Error: stockLote no puede ser 0 en operación de salida');
+          return next(new Error('El stockLote debe reflejar el stock del lote que se está modificando'));
         }
 
         // Validar que la cantidad a vender no exceda el stock disponible
@@ -166,6 +167,12 @@ historialSchema.pre('save', function(next) {
         if (this.stockNuevo >= this.stockAnterior) {
           console.log('Error: El stock nuevo debe ser menor que el anterior en una salida');
           return next(new Error('El stock nuevo debe ser menor que el anterior en una salida'));
+        }
+
+        // Validar que el stockLote sea consistente con el stock anterior
+        if (this.stockLote !== this.stockAnterior) {
+          console.log('Error: El stockLote debe coincidir con el stock anterior en operaciones de salida');
+          return next(new Error('El stockLote debe coincidir con el stock anterior en operaciones de salida'));
         }
       }
       
@@ -224,21 +231,27 @@ historialSchema.post('save', function(doc) {
   if (doc.operacion === 'salida') {
     const diferenciaStock = doc.stockAnterior - doc.stockNuevo;
     const esConsistente = diferenciaStock === doc.cantidad;
+    const porcentajeDescuento = ((doc.cantidad / doc.stockAnterior) * 100).toFixed(2);
     
     console.log('Análisis de salida:', {
       diferenciaStock,
       cantidadVendida: doc.cantidad,
       stockLote: doc.stockLote,
       esConsistente,
-      porcentajeDescuento: ((doc.cantidad / doc.stockAnterior) * 100).toFixed(2) + '%'
+      porcentajeDescuento: porcentajeDescuento + '%',
+      stockLoteConsistente: doc.stockLote === doc.stockAnterior
     });
 
     if (!esConsistente) {
-      console.log('Advertencia: La diferencia de stock no coincide con la cantidad vendida');
+      console.log('Error: La diferencia de stock no coincide con la cantidad vendida');
     }
 
     if (doc.stockLote === 0) {
-      console.log('Advertencia: El registro de salida tiene stockLote en 0');
+      console.log('Error: El registro de salida tiene stockLote en 0');
+    }
+
+    if (doc.stockLote !== doc.stockAnterior) {
+      console.log('Error: El stockLote no coincide con el stock anterior');
     }
   }
 

@@ -235,6 +235,14 @@ router.post('/', async (req, res) => {
           throw new Error(`Stock insuficiente en los lotes para el producto: ${producto.nombre}`);
         }
 
+        // Obtener el lote más reciente para el stockLote
+        const loteMasReciente = lotes[lotes.length - 1];
+        console.log('Lote más reciente seleccionado:', {
+          fecha: loteMasReciente.fecha,
+          stockLote: loteMasReciente.stockLote,
+          operacion: loteMasReciente.operacion
+        });
+
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
@@ -245,13 +253,14 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id}`,
-          stockLote: 0
+          stockLote: loteMasReciente.stockLote // Usar el stockLote del lote más reciente
         });
 
         console.log('\nRegistro de salida a crear:', {
           stockAnterior: historialSalida.stockAnterior,
           stockNuevo: historialSalida.stockNuevo,
-          cantidad: historialSalida.cantidad
+          cantidad: historialSalida.cantidad,
+          stockLote: historialSalida.stockLote
         });
 
         await historialSalida.save({ session });
