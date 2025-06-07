@@ -124,7 +124,8 @@ router.post('/', async (req, res) => {
       stockNuevo: nuevoProducto.stock,
       fecha: nuevoProducto.fechaIngreso,
       stockLote: nuevoProducto.cantidad,
-      costoFinal: nuevoProducto.costoFinal
+      costoFinal: nuevoProducto.costoFinal,
+      detalles: `Creación de producto - Cantidad inicial: ${nuevoProducto.cantidad}`
     };
 
     console.log('Registro de historial a crear:', historialData);
@@ -433,7 +434,7 @@ router.post('/:id/entradas', async (req, res) => {
       fecha: fechaHora,
       stockLote: cantidad,
       costoFinal: costoFinalEntrada,
-      detalles: `Entrada de stock - Lote anterior: ${stockLoteAnterior}, Nuevo lote: ${cantidad}`
+      detalles: `Entrada de stock - Cantidad: ${cantidad}`
     };
 
     console.log('Registro de historial a crear:', historialData);
