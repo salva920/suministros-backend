@@ -158,56 +158,67 @@ router.post('/', async (req, res) => {
           throw new Error(`Stock insuficiente en los lotes para el producto: ${producto.nombre}`);
         }
 
-        // Registrar la salida en el historial
+        // Calcular cuánto se descontará de cada lote
+        let lotesActualizados = [];
+        
+        console.log('\nProceso de descuento de lotes:');
+        for (const lote of lotes) {
+          if (cantidadRestante <= 0) break;
+          
+          const cantidadUsar = Math.min(lote.stockLote, cantidadRestante);
+          const stockLoteNuevo = lote.stockLote - cantidadUsar;
+          
+          console.log('Lote a actualizar:', {
+            fecha: lote.fecha,
+            stockLoteActual: lote.stockLote,
+            cantidadAUsar: cantidadUsar,
+            stockLoteNuevo: stockLoteNuevo
+          });
+
+          lotesActualizados.push({
+            loteId: lote._id,
+            cantidadUsar,
+            stockLoteNuevo
+          });
+          
+          cantidadRestante -= cantidadUsar;
+          console.log('Cantidad restante por descontar:', cantidadRestante);
+        }
+
+        // Crear el registro de salida con el stockLote del primer lote que se modificará
+        const primerLoteAModificar = lotesActualizados[0];
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
           codigoProducto: producto.codigo,
           operacion: 'salida',
           cantidad: item.cantidad,
-          stockAnterior: ultimaEntrada.stockNuevo,
-          stockNuevo: ultimaEntrada.stockNuevo - item.cantidad,
+          stockAnterior: stockTotalLotes,
+          stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
-          detalles: `Venta #${venta._id} - Lote anterior: ${ultimaEntrada.stockNuevo}`,
-          stockLote: 0
+          detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
+          stockLote: lotes[0].stockLote // Usar el stockLote del primer lote
         });
 
         console.log('\nRegistro de salida a crear:', {
           stockAnterior: historialSalida.stockAnterior,
           stockNuevo: historialSalida.stockNuevo,
-          cantidad: historialSalida.cantidad
+          cantidad: historialSalida.cantidad,
+          stockLote: historialSalida.stockLote
         });
 
         await historialSalida.save({ session });
 
-        // Descontar de los lotes manteniendo el stockLote
-        console.log('\nProceso de descuento de lotes:');
-        for (const lote of lotes) {
-          if (cantidadRestante <= 0) break;
-          const cantidadUsar = Math.min(lote.stockLote, cantidadRestante);
-          
-          console.log('Lote a actualizar:', {
-            fecha: lote.fecha,
-            stockLoteActual: lote.stockLote,
-            cantidadAUsar: cantidadUsar,
-            stockLoteNuevo: lote.stockLote - cantidadUsar
-          });
-
+        // Actualizar los lotes
+        for (const actualizacion of lotesActualizados) {
           await Historial.updateOne(
-            { _id: lote._id },
-            { 
-              $inc: { 
-                stockLote: -cantidadUsar
-              }
-            }
+            { _id: actualizacion.loteId },
+            { $set: { stockLote: actualizacion.stockLoteNuevo } }
           ).session(session);
-          
-          cantidadRestante -= cantidadUsar;
-          console.log('Cantidad restante por descontar:', cantidadRestante);
         }
 
         // Actualizar stock del producto
-        producto.stock = historialSalida.stockNuevo;
+        producto.stock = stockTotalLotes - item.cantidad;
         console.log('\nStock final del producto:', producto.stock);
         await producto.save({ session });
       } else {
@@ -235,14 +246,35 @@ router.post('/', async (req, res) => {
           throw new Error(`Stock insuficiente en los lotes para el producto: ${producto.nombre}`);
         }
 
-        // Obtener el lote más reciente para el stockLote
-        const loteMasReciente = lotes[lotes.length - 1];
-        console.log('Lote más reciente seleccionado:', {
-          fecha: loteMasReciente.fecha,
-          stockLote: loteMasReciente.stockLote,
-          operacion: loteMasReciente.operacion
-        });
+        // Calcular cuánto se descontará de cada lote
+        lotesActualizados = [];
+        
+        console.log('\nProceso de descuento de lotes:');
+        for (const lote of lotes) {
+          if (cantidadRestante <= 0) break;
+          
+          const cantidadUsar = Math.min(lote.stockLote, cantidadRestante);
+          const stockLoteNuevo = lote.stockLote - cantidadUsar;
+          
+          console.log('Lote a actualizar:', {
+            fecha: lote.fecha,
+            stockLoteActual: lote.stockLote,
+            cantidadAUsar: cantidadUsar,
+            stockLoteNuevo: stockLoteNuevo
+          });
 
+          lotesActualizados.push({
+            loteId: lote._id,
+            cantidadUsar,
+            stockLoteNuevo
+          });
+          
+          cantidadRestante -= cantidadUsar;
+          console.log('Cantidad restante por descontar:', cantidadRestante);
+        }
+
+        // Crear el registro de salida con el stockLote del primer lote que se modificará
+        const primerLoteAModificar = lotesActualizados[0];
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
@@ -252,8 +284,8 @@ router.post('/', async (req, res) => {
           stockAnterior: stockTotalLotes,
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
-          detalles: `Venta #${venta._id}`,
-          stockLote: stockTotalLotes // Usar el stock total como stockLote
+          detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
+          stockLote: lotes[0].stockLote // Usar el stockLote del primer lote
         });
 
         console.log('\nRegistro de salida a crear:', {
@@ -265,25 +297,12 @@ router.post('/', async (req, res) => {
 
         await historialSalida.save({ session });
 
-        console.log('\nProceso de descuento de lotes:');
-        for (const lote of lotes) {
-          if (cantidadRestante <= 0) break;
-          const cantidadUsar = Math.min(lote.stockLote, cantidadRestante);
-          
-          console.log('Lote a actualizar:', {
-            fecha: lote.fecha,
-            stockLoteActual: lote.stockLote,
-            cantidadAUsar: cantidadUsar,
-            stockLoteNuevo: lote.stockLote - cantidadUsar
-          });
-
+        // Actualizar los lotes
+        for (const actualizacion of lotesActualizados) {
           await Historial.updateOne(
-            { _id: lote._id },
-            { $inc: { stockLote: -cantidadUsar } }
+            { _id: actualizacion.loteId },
+            { $set: { stockLote: actualizacion.stockLoteNuevo } }
           ).session(session);
-          
-          cantidadRestante -= cantidadUsar;
-          console.log('Cantidad restante por descontar:', cantidadRestante);
         }
 
         producto.stock = stockTotalLotes - item.cantidad;
