@@ -25,21 +25,35 @@ const historialSchema = new mongoose.Schema({
   },
   cantidad: {
     type: Number,
-    min: 0,
     required: function() {
       return ['entrada', 'salida', 'ajuste'].includes(this.operacion);
+    },
+    min: 0,
+    validate: {
+      validator: Number.isFinite,
+      message: 'La cantidad debe ser un número válido'
     }
   },
   stockAnterior: {
     type: Number,
     required: function() {
       return ['entrada', 'salida', 'ajuste'].includes(this.operacion);
+    },
+    min: 0,
+    validate: {
+      validator: Number.isFinite,
+      message: 'El stock anterior debe ser un número válido'
     }
   },
   stockNuevo: {
     type: Number,
     required: function() {
       return ['entrada', 'salida', 'ajuste'].includes(this.operacion);
+    },
+    min: 0,
+    validate: {
+      validator: Number.isFinite,
+      message: 'El stock nuevo debe ser un número válido'
     }
   },
   fecha: {
@@ -52,14 +66,22 @@ const historialSchema = new mongoose.Schema({
     required: function() {
       return ['entrada', 'creacion'].includes(this.operacion);
     },
-    min: 0
+    min: 0,
+    validate: {
+      validator: Number.isFinite,
+      message: 'El costo final debe ser un número válido'
+    }
   },
   stockLote: {
     type: Number,
     required: function() {
       return ['entrada', 'creacion'].includes(this.operacion);
     },
-    min: 0
+    min: 0,
+    validate: {
+      validator: Number.isFinite,
+      message: 'El stock de lote debe ser un número válido'
+    }
   },
   detalles: {
     type: String,
@@ -79,6 +101,16 @@ historialSchema.pre('save', function(next) {
       }
       if (typeof this.stockAnterior !== 'number' || typeof this.stockNuevo !== 'number') {
         return next(new Error('Stock anterior y nuevo son requeridos'));
+      }
+      // Validar que el stock nuevo sea consistente
+      const stockCalculado = this.operacion === 'entrada' 
+        ? this.stockAnterior + this.cantidad 
+        : this.operacion === 'salida' 
+          ? this.stockAnterior - this.cantidad 
+          : this.stockAnterior;
+      
+      if (Math.abs(stockCalculado - this.stockNuevo) > 0.01) {
+        return next(new Error('El stock nuevo no coincide con la operación'));
       }
       break;
     case 'entrada':

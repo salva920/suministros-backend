@@ -160,8 +160,7 @@ router.post('/', async (req, res) => {
             { _id: lote._id },
             { 
               $inc: { 
-                stockLote: -cantidadUsar,
-                stockNuevo: -cantidadUsar 
+                stockLote: -cantidadUsar
               }
             }
           ).session(session);

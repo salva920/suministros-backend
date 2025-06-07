@@ -18,14 +18,22 @@ const handleErrors = (res, error) => {
 
 // Middleware para registrar en el historial
 const registrarEnHistorial = async (producto, operacion, cantidad = 0) => {
+  const stockAnterior = producto.stock;
+  const stockNuevo = operacion === 'entrada' 
+    ? stockAnterior + cantidad 
+    : operacion === 'salida' 
+      ? stockAnterior - cantidad 
+      : stockAnterior;
+
   await Historial.create({
     producto: producto._id,
     nombreProducto: producto.nombre,
     codigoProducto: producto.codigo,
     operacion,
     cantidad,
-    stockAnterior: producto.stock - (operacion === 'entrada' ? cantidad : 0),
-    stockNuevo: producto.stock
+    stockAnterior,
+    stockNuevo,
+    fecha: new Date()
   });
 };
 
