@@ -160,6 +160,7 @@ router.post('/', async (req, res) => {
 
         // Calcular cuánto se descontará de cada lote
         let lotesActualizados = [];
+        let loteActual = null;
         
         console.log('\nProceso de descuento de lotes:');
         for (const lote of lotes) {
@@ -175,6 +176,10 @@ router.post('/', async (req, res) => {
             stockLoteNuevo: stockLoteNuevo
           });
 
+          if (cantidadUsar > 0) {
+            loteActual = lote;
+          }
+
           lotesActualizados.push({
             loteId: lote._id,
             cantidadUsar,
@@ -185,7 +190,7 @@ router.post('/', async (req, res) => {
           console.log('Cantidad restante por descontar:', cantidadRestante);
         }
 
-        // Crear el registro de salida usando el stock total como stockLote
+        // Crear el registro de salida usando el stockLote del lote que se está modificando
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
@@ -196,14 +201,18 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
-          stockLote: stockTotalLotes // Usar el stock total como stockLote
+          stockLote: loteActual ? loteActual.stockLote : stockTotalLotes
         });
 
         console.log('\nRegistro de salida a crear:', {
           stockAnterior: historialSalida.stockAnterior,
           stockNuevo: historialSalida.stockNuevo,
           cantidad: historialSalida.cantidad,
-          stockLote: historialSalida.stockLote
+          stockLote: historialSalida.stockLote,
+          loteModificado: loteActual ? {
+            fecha: loteActual.fecha,
+            stockLote: loteActual.stockLote
+          } : null
         });
 
         await historialSalida.save({ session });
@@ -247,6 +256,7 @@ router.post('/', async (req, res) => {
 
         // Calcular cuánto se descontará de cada lote
         let lotesActualizados = [];
+        let loteActual = null;
         
         console.log('\nProceso de descuento de lotes:');
         for (const lote of lotes) {
@@ -262,6 +272,10 @@ router.post('/', async (req, res) => {
             stockLoteNuevo: stockLoteNuevo
           });
 
+          if (cantidadUsar > 0) {
+            loteActual = lote;
+          }
+
           lotesActualizados.push({
             loteId: lote._id,
             cantidadUsar,
@@ -272,7 +286,7 @@ router.post('/', async (req, res) => {
           console.log('Cantidad restante por descontar:', cantidadRestante);
         }
 
-        // Crear el registro de salida usando el stock total como stockLote
+        // Crear el registro de salida usando el stockLote del lote que se está modificando
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
@@ -283,14 +297,18 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
-          stockLote: stockTotalLotes // Usar el stock total como stockLote
+          stockLote: loteActual ? loteActual.stockLote : stockTotalLotes
         });
 
         console.log('\nRegistro de salida a crear:', {
           stockAnterior: historialSalida.stockAnterior,
           stockNuevo: historialSalida.stockNuevo,
           cantidad: historialSalida.cantidad,
-          stockLote: historialSalida.stockLote
+          stockLote: historialSalida.stockLote,
+          loteModificado: loteActual ? {
+            fecha: loteActual.fecha,
+            stockLote: loteActual.stockLote
+          } : null
         });
 
         await historialSalida.save({ session });
