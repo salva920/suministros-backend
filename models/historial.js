@@ -99,7 +99,10 @@ historialSchema.pre('save', function(next) {
     stockNuevo: this.stockNuevo,
     stockLote: this.stockLote,
     costoFinal: this.costoFinal,
-    fecha: this.fecha
+    fecha: this.fecha,
+    producto: this.producto,
+    nombreProducto: this.nombreProducto,
+    codigoProducto: this.codigoProducto
   });
 
   // Validar campos según el tipo de operación
@@ -135,8 +138,19 @@ historialSchema.pre('save', function(next) {
         cantidad: this.cantidad,
         stockCalculado: stockCalculado,
         stockNuevo: this.stockNuevo,
-        diferencia: Math.abs(stockCalculado - this.stockNuevo)
+        diferencia: Math.abs(stockCalculado - this.stockNuevo),
+        stockLote: this.stockLote
       });
+
+      // Validación adicional para operaciones de salida
+      if (this.operacion === 'salida') {
+        console.log('Validación específica para salida:', {
+          stockLote: this.stockLote,
+          cantidad: this.cantidad,
+          stockAnterior: this.stockAnterior,
+          stockNuevo: this.stockNuevo
+        });
+      }
       
       if (Math.abs(stockCalculado - this.stockNuevo) > 0.01) {
         console.log('Error: El stock nuevo no coincide con la operación');
@@ -160,7 +174,9 @@ historialSchema.pre('save', function(next) {
 
       console.log('Validación de lote:', {
         costoFinal: this.costoFinal,
-        stockLote: this.stockLote
+        stockLote: this.stockLote,
+        stockAnterior: this.stockAnterior,
+        stockNuevo: this.stockNuevo
       });
       break;
   }
@@ -181,8 +197,22 @@ historialSchema.post('save', function(doc) {
     stockNuevo: doc.stockNuevo,
     stockLote: doc.stockLote,
     costoFinal: doc.costoFinal,
-    fecha: doc.fecha
+    fecha: doc.fecha,
+    producto: doc.producto,
+    nombreProducto: doc.nombreProducto,
+    codigoProducto: doc.codigoProducto
   });
+
+  // Análisis adicional para operaciones de salida
+  if (doc.operacion === 'salida') {
+    console.log('Análisis de salida:', {
+      diferenciaStock: doc.stockAnterior - doc.stockNuevo,
+      cantidadVendida: doc.cantidad,
+      stockLote: doc.stockLote,
+      esConsistente: (doc.stockAnterior - doc.stockNuevo) === doc.cantidad
+    });
+  }
+
   console.log('=== FIN REGISTRO GUARDADO ===\n');
 });
 
