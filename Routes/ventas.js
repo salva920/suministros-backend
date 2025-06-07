@@ -253,7 +253,7 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id}`,
-          stockLote: loteMasReciente.stockLote // Usar el stockLote del lote más reciente
+          stockLote: stockTotalLotes // Usar el stock total como stockLote
         });
 
         console.log('\nRegistro de salida a crear:', {
