@@ -258,10 +258,11 @@ router.post('/', async (req, res) => {
         .lean()
         .session(session);
 
-        console.log('Lotes encontrados:', lotes.map(lote => ({
+        console.log('\nLotes encontrados:', lotes.map(lote => ({
           fecha: lote.fecha,
           stockLote: lote.stockLote,
-          operacion: lote.operacion
+          operacion: lote.operacion,
+          costoFinal: lote.costoFinal
         })));
 
         const stockTotalLotes = lotes.reduce((total, lote) => total + lote.stockLote, 0);
@@ -287,7 +288,8 @@ router.post('/', async (req, res) => {
             stockLoteActual: lote.stockLote,
             cantidadAUsar: cantidadUsar,
             stockLoteNuevo: stockLoteNuevo,
-            costoFinal: lote.costoFinal
+            costoFinal: lote.costoFinal,
+            precioVenta: item.precioUnitario
           });
 
           if (cantidadUsar > 0) {
@@ -297,8 +299,10 @@ router.post('/', async (req, res) => {
             
             gananciasPorLote.push({
               loteId: lote._id,
+              fecha: lote.fecha,
               cantidad: cantidadUsar,
               costoFinal: lote.costoFinal,
+              precioVenta: item.precioUnitario,
               gananciaUnitaria,
               gananciaTotal
             });
@@ -338,8 +342,10 @@ router.post('/', async (req, res) => {
             stockLoteNuevo: l.stockLoteNuevo
           })),
           gananciasPorLote: gananciasPorLote.map(g => ({
+            fecha: g.fecha,
             cantidad: g.cantidad,
             costoFinal: g.costoFinal,
+            precioVenta: g.precioVenta,
             gananciaUnitaria: g.gananciaUnitaria,
             gananciaTotal: g.gananciaTotal
           }))
