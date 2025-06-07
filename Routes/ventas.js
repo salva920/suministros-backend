@@ -160,9 +160,9 @@ router.post('/', async (req, res) => {
 
         // Calcular cuánto se descontará de cada lote
         let lotesActualizados = [];
-        let loteActual = null;
+        let gananciasPorLote = [];
         
-        console.log('\nProceso de descuento de lotes:');
+        console.log('\nProceso de descuento de lotes (FIFO):');
         for (const lote of lotes) {
           if (cantidadRestante <= 0) break;
           
@@ -173,21 +173,32 @@ router.post('/', async (req, res) => {
             fecha: lote.fecha,
             stockLoteActual: lote.stockLote,
             cantidadAUsar: cantidadUsar,
-            stockLoteNuevo: stockLoteNuevo
+            stockLoteNuevo: stockLoteNuevo,
+            costoFinal: lote.costoFinal
           });
 
           if (cantidadUsar > 0) {
-            loteActual = lote;
-          }
+            // Calcular ganancia para este lote
+            const gananciaUnitaria = item.precioUnitario - lote.costoFinal;
+            const gananciaTotal = gananciaUnitaria * cantidadUsar;
+            
+            gananciasPorLote.push({
+              loteId: lote._id,
+              cantidad: cantidadUsar,
+              costoFinal: lote.costoFinal,
+              gananciaUnitaria,
+              gananciaTotal
+            });
 
-          lotesActualizados.push({
-            loteId: lote._id,
-            cantidadUsar,
-            stockLoteNuevo
-          });
-          
-          cantidadRestante -= cantidadUsar;
-          console.log('Cantidad restante por descontar:', cantidadRestante);
+            lotesActualizados.push({
+              loteId: lote._id,
+              cantidadUsar,
+              stockLoteNuevo
+            });
+            
+            cantidadRestante -= cantidadUsar;
+            console.log('Cantidad restante por descontar:', cantidadRestante);
+          }
         }
 
         // Crear el registro de salida usando el stockTotalLotes como stockLote
@@ -212,6 +223,12 @@ router.post('/', async (req, res) => {
           lotesModificados: lotesActualizados.map(l => ({
             cantidadUsar: l.cantidadUsar,
             stockLoteNuevo: l.stockLoteNuevo
+          })),
+          gananciasPorLote: gananciasPorLote.map(g => ({
+            cantidad: g.cantidad,
+            costoFinal: g.costoFinal,
+            gananciaUnitaria: g.gananciaUnitaria,
+            gananciaTotal: g.gananciaTotal
           }))
         });
 
@@ -256,9 +273,9 @@ router.post('/', async (req, res) => {
 
         // Calcular cuánto se descontará de cada lote
         let lotesActualizados = [];
-        let loteActual = null;
+        let gananciasPorLote = [];
         
-        console.log('\nProceso de descuento de lotes:');
+        console.log('\nProceso de descuento de lotes (FIFO):');
         for (const lote of lotes) {
           if (cantidadRestante <= 0) break;
           
@@ -269,21 +286,32 @@ router.post('/', async (req, res) => {
             fecha: lote.fecha,
             stockLoteActual: lote.stockLote,
             cantidadAUsar: cantidadUsar,
-            stockLoteNuevo: stockLoteNuevo
+            stockLoteNuevo: stockLoteNuevo,
+            costoFinal: lote.costoFinal
           });
 
           if (cantidadUsar > 0) {
-            loteActual = lote;
-          }
+            // Calcular ganancia para este lote
+            const gananciaUnitaria = item.precioUnitario - lote.costoFinal;
+            const gananciaTotal = gananciaUnitaria * cantidadUsar;
+            
+            gananciasPorLote.push({
+              loteId: lote._id,
+              cantidad: cantidadUsar,
+              costoFinal: lote.costoFinal,
+              gananciaUnitaria,
+              gananciaTotal
+            });
 
-          lotesActualizados.push({
-            loteId: lote._id,
-            cantidadUsar,
-            stockLoteNuevo
-          });
-          
-          cantidadRestante -= cantidadUsar;
-          console.log('Cantidad restante por descontar:', cantidadRestante);
+            lotesActualizados.push({
+              loteId: lote._id,
+              cantidadUsar,
+              stockLoteNuevo
+            });
+            
+            cantidadRestante -= cantidadUsar;
+            console.log('Cantidad restante por descontar:', cantidadRestante);
+          }
         }
 
         // Crear el registro de salida usando el stockTotalLotes como stockLote
@@ -308,6 +336,12 @@ router.post('/', async (req, res) => {
           lotesModificados: lotesActualizados.map(l => ({
             cantidadUsar: l.cantidadUsar,
             stockLoteNuevo: l.stockLoteNuevo
+          })),
+          gananciasPorLote: gananciasPorLote.map(g => ({
+            cantidad: g.cantidad,
+            costoFinal: g.costoFinal,
+            gananciaUnitaria: g.gananciaUnitaria,
+            gananciaTotal: g.gananciaTotal
           }))
         });
 
