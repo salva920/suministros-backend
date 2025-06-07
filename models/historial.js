@@ -91,17 +91,37 @@ const historialSchema = new mongoose.Schema({
 
 // Validación pre-save
 historialSchema.pre('save', function(next) {
+  console.log('\n=== VALIDACIÓN DE HISTORIAL ===');
+  console.log('Datos recibidos:', {
+    operacion: this.operacion,
+    cantidad: this.cantidad,
+    stockAnterior: this.stockAnterior,
+    stockNuevo: this.stockNuevo,
+    stockLote: this.stockLote,
+    costoFinal: this.costoFinal,
+    fecha: this.fecha
+  });
+
   // Validar campos según el tipo de operación
   switch(this.operacion) {
     case 'entrada':
     case 'salida':
     case 'ajuste':
+      console.log('\nValidando operación:', this.operacion);
+      
       if (!this.cantidad || this.cantidad < 0) {
+        console.log('Error: Cantidad inválida:', this.cantidad);
         return next(new Error('Cantidad inválida'));
       }
+      
       if (typeof this.stockAnterior !== 'number' || typeof this.stockNuevo !== 'number') {
+        console.log('Error: Stock anterior o nuevo inválido:', {
+          stockAnterior: this.stockAnterior,
+          stockNuevo: this.stockNuevo
+        });
         return next(new Error('Stock anterior y nuevo son requeridos'));
       }
+
       // Validar que el stock nuevo sea consistente
       const stockCalculado = this.operacion === 'entrada' 
         ? this.stockAnterior + this.cantidad 
@@ -109,21 +129,61 @@ historialSchema.pre('save', function(next) {
           ? this.stockAnterior - this.cantidad 
           : this.stockAnterior;
       
+      console.log('Cálculo de stock:', {
+        operacion: this.operacion,
+        stockAnterior: this.stockAnterior,
+        cantidad: this.cantidad,
+        stockCalculado: stockCalculado,
+        stockNuevo: this.stockNuevo,
+        diferencia: Math.abs(stockCalculado - this.stockNuevo)
+      });
+      
       if (Math.abs(stockCalculado - this.stockNuevo) > 0.01) {
+        console.log('Error: El stock nuevo no coincide con la operación');
         return next(new Error('El stock nuevo no coincide con la operación'));
       }
       break;
+
     case 'entrada':
     case 'creacion':
+      console.log('\nValidando operación:', this.operacion);
+      
       if (!this.costoFinal || this.costoFinal < 0) {
+        console.log('Error: Costo final inválido:', this.costoFinal);
         return next(new Error('Costo final inválido'));
       }
+      
       if (!this.stockLote || this.stockLote < 0) {
+        console.log('Error: Stock de lote inválido:', this.stockLote);
         return next(new Error('Stock de lote inválido'));
       }
+
+      console.log('Validación de lote:', {
+        costoFinal: this.costoFinal,
+        stockLote: this.stockLote
+      });
       break;
   }
+
+  console.log('Validación exitosa');
+  console.log('=== FIN VALIDACIÓN DE HISTORIAL ===\n');
   next();
+});
+
+// Middleware post-save para verificar el resultado
+historialSchema.post('save', function(doc) {
+  console.log('\n=== REGISTRO GUARDADO EN HISTORIAL ===');
+  console.log('Datos guardados:', {
+    id: doc._id,
+    operacion: doc.operacion,
+    cantidad: doc.cantidad,
+    stockAnterior: doc.stockAnterior,
+    stockNuevo: doc.stockNuevo,
+    stockLote: doc.stockLote,
+    costoFinal: doc.costoFinal,
+    fecha: doc.fecha
+  });
+  console.log('=== FIN REGISTRO GUARDADO ===\n');
 });
 
 // Índices compuestos para consultas frecuentes
