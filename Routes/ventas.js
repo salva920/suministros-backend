@@ -185,8 +185,7 @@ router.post('/', async (req, res) => {
           console.log('Cantidad restante por descontar:', cantidadRestante);
         }
 
-        // Crear el registro de salida con el stockLote del primer lote que se modificará
-        const primerLoteAModificar = lotesActualizados[0];
+        // Crear el registro de salida usando el stock total como stockLote
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
@@ -197,7 +196,7 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
-          stockLote: lotes[0].stockLote // Usar el stockLote del primer lote
+          stockLote: stockTotalLotes // Usar el stock total como stockLote
         });
 
         console.log('\nRegistro de salida a crear:', {
@@ -247,7 +246,7 @@ router.post('/', async (req, res) => {
         }
 
         // Calcular cuánto se descontará de cada lote
-        lotesActualizados = [];
+        let lotesActualizados = [];
         
         console.log('\nProceso de descuento de lotes:');
         for (const lote of lotes) {
@@ -273,8 +272,7 @@ router.post('/', async (req, res) => {
           console.log('Cantidad restante por descontar:', cantidadRestante);
         }
 
-        // Crear el registro de salida con el stockLote del primer lote que se modificará
-        const primerLoteAModificar = lotesActualizados[0];
+        // Crear el registro de salida usando el stock total como stockLote
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
@@ -285,7 +283,7 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
-          stockLote: lotes[0].stockLote // Usar el stockLote del primer lote
+          stockLote: stockTotalLotes // Usar el stock total como stockLote
         });
 
         console.log('\nRegistro de salida a crear:', {
