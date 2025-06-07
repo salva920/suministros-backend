@@ -150,6 +150,23 @@ historialSchema.pre('save', function(next) {
           stockAnterior: this.stockAnterior,
           stockNuevo: this.stockNuevo
         });
+
+        // Validar que el stockLote sea consistente con la operación
+        if (this.stockLote === 0) {
+          console.log('Advertencia: stockLote es 0 en operación de salida');
+        }
+
+        // Validar que la cantidad a vender no exceda el stock disponible
+        if (this.cantidad > this.stockAnterior) {
+          console.log('Error: La cantidad a vender excede el stock disponible');
+          return next(new Error('La cantidad a vender excede el stock disponible'));
+        }
+
+        // Validar que el stock nuevo sea menor que el anterior
+        if (this.stockNuevo >= this.stockAnterior) {
+          console.log('Error: El stock nuevo debe ser menor que el anterior en una salida');
+          return next(new Error('El stock nuevo debe ser menor que el anterior en una salida'));
+        }
       }
       
       if (Math.abs(stockCalculado - this.stockNuevo) > 0.01) {
@@ -205,12 +222,24 @@ historialSchema.post('save', function(doc) {
 
   // Análisis adicional para operaciones de salida
   if (doc.operacion === 'salida') {
+    const diferenciaStock = doc.stockAnterior - doc.stockNuevo;
+    const esConsistente = diferenciaStock === doc.cantidad;
+    
     console.log('Análisis de salida:', {
-      diferenciaStock: doc.stockAnterior - doc.stockNuevo,
+      diferenciaStock,
       cantidadVendida: doc.cantidad,
       stockLote: doc.stockLote,
-      esConsistente: (doc.stockAnterior - doc.stockNuevo) === doc.cantidad
+      esConsistente,
+      porcentajeDescuento: ((doc.cantidad / doc.stockAnterior) * 100).toFixed(2) + '%'
     });
+
+    if (!esConsistente) {
+      console.log('Advertencia: La diferencia de stock no coincide con la cantidad vendida');
+    }
+
+    if (doc.stockLote === 0) {
+      console.log('Advertencia: El registro de salida tiene stockLote en 0');
+    }
   }
 
   console.log('=== FIN REGISTRO GUARDADO ===\n');
