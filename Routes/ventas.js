@@ -212,7 +212,7 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
-          stockLote: lotesActualizados[0].stockLoteNuevo // Usar el stock del lote modificado
+          stockLote: lotes[0].stockLote // Usar el stock actual del lote que se está modificando
         });
 
         console.log('\nRegistro de salida a crear:', {
@@ -331,7 +331,7 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
-          stockLote: lotesActualizados[0].stockLoteNuevo // Usar el stock del lote modificado
+          stockLote: lotes[0].stockLote // Usar el stock actual del lote que se está modificando
         });
 
         console.log('\nRegistro de salida a crear:', {
