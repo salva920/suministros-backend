@@ -431,9 +431,9 @@ router.post('/:id/entradas', async (req, res) => {
       stockAnterior: stockAnterior,
       stockNuevo: producto.stock,
       fecha: fechaHora,
-      stockLote: nuevoStockLote,
+      stockLote: cantidad,
       costoFinal: costoFinalEntrada,
-      detalles: `Entrada de stock - Lote anterior: ${stockLoteAnterior}, Nuevo lote: ${nuevoStockLote}`
+      detalles: `Entrada de stock - Lote anterior: ${stockLoteAnterior}, Nuevo lote: ${cantidad}`
     };
 
     console.log('Registro de historial a crear:', historialData);
