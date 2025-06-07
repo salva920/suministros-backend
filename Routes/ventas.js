@@ -201,7 +201,7 @@ router.post('/', async (req, res) => {
           }
         }
 
-        // Crear el registro de salida usando el stockTotalLotes como stockLote
+        // Crear el registro de salida usando el stock del lote específico
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
@@ -212,7 +212,7 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
-          stockLote: stockTotalLotes // Usar el stock total como stockLote
+          stockLote: lotesActualizados[0].stockLoteNuevo // Usar el stock del lote modificado
         });
 
         console.log('\nRegistro de salida a crear:', {
@@ -225,8 +225,10 @@ router.post('/', async (req, res) => {
             stockLoteNuevo: l.stockLoteNuevo
           })),
           gananciasPorLote: gananciasPorLote.map(g => ({
+            fecha: g.fecha,
             cantidad: g.cantidad,
             costoFinal: g.costoFinal,
+            precioVenta: g.precioVenta,
             gananciaUnitaria: g.gananciaUnitaria,
             gananciaTotal: g.gananciaTotal
           }))
@@ -318,7 +320,7 @@ router.post('/', async (req, res) => {
           }
         }
 
-        // Crear el registro de salida usando el stockTotalLotes como stockLote
+        // Crear el registro de salida usando el stock del lote específico
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
@@ -329,7 +331,7 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
-          stockLote: stockTotalLotes // Usar el stock total como stockLote
+          stockLote: lotesActualizados[0].stockLoteNuevo // Usar el stock del lote modificado
         });
 
         console.log('\nRegistro de salida a crear:', {
