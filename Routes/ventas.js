@@ -193,7 +193,8 @@ router.post('/', async (req, res) => {
             lotesActualizados.push({
               loteId: lote._id,
               cantidadUsar,
-              stockLoteNuevo
+              stockLoteNuevo,
+              stockLoteActual: lote.stockLote
             });
             
             cantidadRestante -= cantidadUsar;
@@ -222,7 +223,8 @@ router.post('/', async (req, res) => {
           stockLote: historialSalida.stockLote,
           lotesModificados: lotesActualizados.map(l => ({
             cantidadUsar: l.cantidadUsar,
-            stockLoteNuevo: l.stockLoteNuevo
+            stockLoteNuevo: l.stockLoteNuevo,
+            stockLoteActual: l.stockLoteActual
           })),
           gananciasPorLote: gananciasPorLote.map(g => ({
             cantidad: g.cantidad,
@@ -238,7 +240,13 @@ router.post('/', async (req, res) => {
         for (const actualizacion of lotesActualizados) {
           await Historial.updateOne(
             { _id: actualizacion.loteId },
-            { $set: { stockLote: actualizacion.stockLoteNuevo } }
+            { 
+              $set: { 
+                stockLote: actualizacion.stockLoteNuevo,
+                stockAnterior: actualizacion.stockLoteActual,
+                stockNuevo: actualizacion.stockLoteNuevo
+              } 
+            }
           ).session(session);
         }
 
@@ -310,7 +318,8 @@ router.post('/', async (req, res) => {
             lotesActualizados.push({
               loteId: lote._id,
               cantidadUsar,
-              stockLoteNuevo
+              stockLoteNuevo,
+              stockLoteActual: lote.stockLote
             });
             
             cantidadRestante -= cantidadUsar;
@@ -339,7 +348,8 @@ router.post('/', async (req, res) => {
           stockLote: historialSalida.stockLote,
           lotesModificados: lotesActualizados.map(l => ({
             cantidadUsar: l.cantidadUsar,
-            stockLoteNuevo: l.stockLoteNuevo
+            stockLoteNuevo: l.stockLoteNuevo,
+            stockLoteActual: l.stockLoteActual
           })),
           gananciasPorLote: gananciasPorLote.map(g => ({
             fecha: g.fecha,
@@ -357,7 +367,13 @@ router.post('/', async (req, res) => {
         for (const actualizacion of lotesActualizados) {
           await Historial.updateOne(
             { _id: actualizacion.loteId },
-            { $set: { stockLote: actualizacion.stockLoteNuevo } }
+            { 
+              $set: { 
+                stockLote: actualizacion.stockLoteNuevo,
+                stockAnterior: actualizacion.stockLoteActual,
+                stockNuevo: actualizacion.stockLoteNuevo
+              } 
+            }
           ).session(session);
         }
 
