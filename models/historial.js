@@ -169,10 +169,10 @@ historialSchema.pre('save', function(next) {
           return next(new Error('El stock nuevo debe ser menor que el anterior en una salida'));
         }
 
-        // Validar que el stockLote sea consistente con el stock anterior
-        if (this.stockLote !== this.stockAnterior) {
-          console.log('Error: El stockLote debe coincidir con el stock anterior en operaciones de salida');
-          return next(new Error('El stockLote debe coincidir con el stock anterior en operaciones de salida'));
+        // Validar que el stockLote sea igual a la cantidad vendida
+        if (this.stockLote !== this.cantidad) {
+          console.log('Error: El stockLote debe coincidir con la cantidad vendida en operaciones de salida');
+          return next(new Error('El stockLote debe coincidir con la cantidad vendida en operaciones de salida'));
         }
       }
       
