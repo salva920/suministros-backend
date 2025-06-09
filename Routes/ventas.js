@@ -202,6 +202,19 @@ router.post('/', async (req, res) => {
           }
         }
 
+        // Actualizar los lotes
+        for (const actualizacion of lotesActualizados) {
+          // Solo actualizamos el stockLote en el registro de salida
+          await Historial.updateOne(
+            { _id: actualizacion.loteId },
+            { 
+              $set: { 
+                stockLote: actualizacion.stockLoteNuevo
+              } 
+            }
+          ).session(session);
+        }
+
         // Crear el registro de salida usando el stockTotalLotes como stockLote
         const historialSalida = new Historial({
           producto: producto._id,
@@ -213,7 +226,7 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
-          stockLote: stockTotalLotes // Usar el stock total como stockLote
+          stockLote: item.cantidad // Usar la cantidad vendida como stockLote
         });
 
         console.log('\nRegistro de salida a crear:', {
@@ -235,20 +248,6 @@ router.post('/', async (req, res) => {
         });
 
         await historialSalida.save({ session });
-
-        // Actualizar los lotes
-        for (const actualizacion of lotesActualizados) {
-          await Historial.updateOne(
-            { _id: actualizacion.loteId },
-            { 
-              $set: { 
-                stockLote: actualizacion.stockLoteNuevo,
-                stockAnterior: actualizacion.stockLoteActual,
-                stockNuevo: actualizacion.stockLoteNuevo
-              } 
-            }
-          ).session(session);
-        }
 
         // Actualizar stock del producto
         producto.stock = stockTotalLotes - item.cantidad;
@@ -327,6 +326,19 @@ router.post('/', async (req, res) => {
           }
         }
 
+        // Actualizar los lotes
+        for (const actualizacion of lotesActualizados) {
+          // Solo actualizamos el stockLote en el registro de salida
+          await Historial.updateOne(
+            { _id: actualizacion.loteId },
+            { 
+              $set: { 
+                stockLote: actualizacion.stockLoteNuevo
+              } 
+            }
+          ).session(session);
+        }
+
         // Crear el registro de salida usando el stockTotalLotes como stockLote
         const historialSalida = new Historial({
           producto: producto._id,
@@ -338,7 +350,7 @@ router.post('/', async (req, res) => {
           stockNuevo: stockTotalLotes - item.cantidad,
           fecha: new Date(),
           detalles: `Venta #${venta._id} - Descuento de ${lotesActualizados.length} lotes`,
-          stockLote: stockTotalLotes // Usar el stock total como stockLote
+          stockLote: item.cantidad // Usar la cantidad vendida como stockLote
         });
 
         console.log('\nRegistro de salida a crear:', {
@@ -363,20 +375,7 @@ router.post('/', async (req, res) => {
 
         await historialSalida.save({ session });
 
-        // Actualizar los lotes
-        for (const actualizacion of lotesActualizados) {
-          await Historial.updateOne(
-            { _id: actualizacion.loteId },
-            { 
-              $set: { 
-                stockLote: actualizacion.stockLoteNuevo,
-                stockAnterior: actualizacion.stockLoteActual,
-                stockNuevo: actualizacion.stockLoteNuevo
-              } 
-            }
-          ).session(session);
-        }
-
+        // Actualizar stock del producto
         producto.stock = stockTotalLotes - item.cantidad;
         console.log('\nStock final del producto:', producto.stock);
         await producto.save({ session });
