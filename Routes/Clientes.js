@@ -99,8 +99,14 @@ router.put('/:id', asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'ID inválido' });
   }
 
+  // Obtener el cliente actual
+  const clienteActual = await Cliente.findById(req.params.id);
+  if (!clienteActual) {
+    return res.status(404).json({ message: 'Cliente no encontrado' });
+  }
+
   // Verificar si el nuevo RIF ya existe en otro cliente
-  if (req.body.rif) {
+  if (req.body.rif && req.body.rif !== clienteActual.rif) {
     const clienteExistente = await Cliente.findOne({ 
       rif: req.body.rif, 
       _id: { $ne: new mongoose.Types.ObjectId(req.params.id) }
@@ -113,6 +119,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
     }
   }
 
+  // Actualizar cliente
   const clienteActualizado = await Cliente.findByIdAndUpdate(
     req.params.id,
     req.body,

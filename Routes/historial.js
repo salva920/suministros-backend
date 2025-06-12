@@ -18,7 +18,7 @@ const asyncHandler = fn => (req, res, next) => {
 router.get('/', asyncHandler(async (req, res) => {
   const { 
     page = 1, 
-    limit = 10,
+    limit = 1000,
     search,
     startDate,
     endDate,
