@@ -275,7 +275,7 @@ router.post('/:id/entradas', async (req, res) => {
       throw new Error('Producto no encontrado');
     }
     
-    const cantidad = Number(req.body.cantidad) || 0;
+    const cantidad = parseFloat(Number(req.body.cantidad).toFixed(2)) || 0;
     if (cantidad <= 0) {
       throw new Error('La cantidad debe ser mayor a 0');
     }
@@ -288,8 +288,8 @@ router.post('/:id/entradas', async (req, res) => {
     const stockAnterior = producto.stock || 0;
     const cantidadAnterior = producto.cantidad || 0;
     
-    producto.stock = stockAnterior + cantidad;
-    producto.cantidad = cantidadAnterior + cantidad;
+    producto.stock = parseFloat((stockAnterior + cantidad).toFixed(2));
+    producto.cantidad = parseFloat((cantidadAnterior + cantidad).toFixed(2));
     
     const costoInicial = Number(req.body.costoUnitario) || producto.costoInicial || 0;
     const acarreo = Number(req.body.acarreo) || 0;
