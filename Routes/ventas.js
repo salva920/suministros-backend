@@ -3,7 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose'); 
 const Venta = require('../models/Venta');
 const Producto = require('../models/Producto');
-const moment = require('moment'); // Asegúrate de que esta línea esté presente
+const moment = require('moment');
 const Historial = require('../models/historial');
 
 // Crear una nueva venta (POST /api/ventas)
@@ -12,17 +12,14 @@ router.post('/', async (req, res) => {
   session.startTransaction();
   
   try {
-    // Validar datos de entrada
     if (!req.body.productos || !Array.isArray(req.body.productos) || req.body.productos.length === 0) {
       return res.status(400).json({ error: 'Debe incluir al menos un producto' });
     }
 
-    // Validar cliente
     if (!req.body.cliente) {
       return res.status(400).json({ error: 'Debe especificar un cliente' });
     }
 
-    // Validación mejorada de montos
     const total = parseFloat(req.body.total.toFixed(2));
     const montoAbonado = parseFloat((req.body.montoAbonado || 0).toFixed(2));
     const saldoPendiente = parseFloat((req.body.saldoPendiente || 0).toFixed(2));
@@ -35,7 +32,6 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Monto abonado inválido' });
     }
 
-    // Validar que los montos coincidan
     const diferencia = Math.abs(total - montoAbonado - saldoPendiente);
     if (diferencia > 0.05) {
       return res.status(400).json({ 
@@ -49,7 +45,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Formatear productos con precisión decimal
     const productos = req.body.productos.map(p => ({
       producto: p.producto,
       cantidad: parseFloat(p.cantidad.toFixed(2)),
@@ -59,7 +54,6 @@ router.post('/', async (req, res) => {
       gananciaTotal: parseFloat(p.gananciaTotal.toFixed(2))
     }));
 
-    // Cálculo de verificación
     const totalVerificado = parseFloat(productos.reduce((sum, p) => 
       sum + (p.precioUnitario * p.cantidad), 0).toFixed(2));
       
@@ -74,7 +68,6 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Crear venta con datos formateados
     const ventaData = {
       fecha: new Date(req.body.fecha),
       cliente: req.body.cliente,
@@ -93,27 +86,16 @@ router.post('/', async (req, res) => {
     const venta = new Venta(ventaData);
     await venta.save({ session });
 
-    // Proceso de actualización de stock
     for (const item of productos) {
-      console.log('\n=== INICIO PROCESO DE VENTA PARA PRODUCTO ===');
-      console.log('Producto ID:', item.producto);
-      console.log('Cantidad a vender:', item.cantidad);
-
       const producto = await Producto.findById(item.producto).session(session);
       
       if (!producto) {
         throw new Error(`Producto no encontrado: ${item.producto}`);
       }
 
-      console.log('Stock actual del producto:', producto.stock);
-      console.log('Nombre del producto:', producto.nombre);
-
-      // Solo aplicar la lógica especial para el producto con inconsistencia
       if (producto._id.toString() === '6834774f5e6ceeeab51f6937') {
-        console.log('\n--- PROCESO ESPECIAL PARA PRODUCTO ESPECÍFICO ---');
         let cantidadRestante = item.cantidad;
 
-        // Obtener el último registro de entrada para mantener la consistencia
         const ultimaEntrada = await Historial.findOne({
           producto: producto._id,
           operacion: { $in: ['creacion', 'entrada'] },
@@ -123,17 +105,10 @@ router.post('/', async (req, res) => {
         .lean()
         .session(session);
 
-        console.log('Última entrada encontrada:', {
-          fecha: ultimaEntrada?.fecha,
-          stockNuevo: ultimaEntrada?.stockNuevo,
-          stockLote: ultimaEntrada?.stockLote
-        });
-
         if (!ultimaEntrada) {
           throw new Error(`No hay registros de entrada para el producto: ${producto.nombre}`);
         }
 
-        // Optimizar consulta de lotes con índices
         const lotes = await Historial.find({
           producto: producto._id,
           operacion: { $in: ['creacion', 'entrada'] },
@@ -144,41 +119,22 @@ router.post('/', async (req, res) => {
         .lean()
         .session(session);
 
-        console.log('\nLotes disponibles:', lotes.map(lote => ({
-          fecha: lote.fecha,
-          stockLote: lote.stockLote,
-          operacion: lote.operacion
-        })));
-
-        // Verificar stock total
         const stockTotalLotes = lotes.reduce((total, lote) => total + lote.stockLote, 0);
-        console.log('Stock total en lotes:', stockTotalLotes);
         
         if (stockTotalLotes < item.cantidad) {
           throw new Error(`Stock insuficiente en los lotes para el producto: ${producto.nombre}`);
         }
 
-        // Calcular cuánto se descontará de cada lote
         let lotesActualizados = [];
         let gananciasPorLote = [];
         
-        console.log('\nProceso de descuento de lotes (FIFO):');
         for (const lote of lotes) {
           if (cantidadRestante <= 0) break;
           
           const cantidadUsar = Math.min(lote.stockLote, cantidadRestante);
           const stockLoteNuevo = lote.stockLote - cantidadUsar;
           
-          console.log('Lote a actualizar:', {
-            fecha: lote.fecha,
-            stockLoteActual: lote.stockLote,
-            cantidadAUsar: cantidadUsar,
-            stockLoteNuevo: stockLoteNuevo,
-            costoFinal: lote.costoFinal
-          });
-
           if (cantidadUsar > 0) {
-            // Calcular ganancia para este lote
             const gananciaUnitaria = item.precioUnitario - lote.costoFinal;
             const gananciaTotal = gananciaUnitaria * cantidadUsar;
             
@@ -198,13 +154,10 @@ router.post('/', async (req, res) => {
             });
             
             cantidadRestante -= cantidadUsar;
-            console.log('Cantidad restante por descontar:', cantidadRestante);
           }
         }
 
-        // Actualizar los lotes
         for (const actualizacion of lotesActualizados) {
-          // Solo actualizamos el stockLote en el registro de salida
           await Historial.updateOne(
             { _id: actualizacion.loteId },
             { 
@@ -216,21 +169,19 @@ router.post('/', async (req, res) => {
             }
           ).session(session);
 
-          // Si es el primer lote (creación), mantener el stockLote original
           const lote = await Historial.findById(actualizacion.loteId).session(session);
           if (lote.operacion === 'creacion') {
             await Historial.updateOne(
               { _id: actualizacion.loteId },
               { 
                 $set: { 
-                  stockLote: lote.cantidad // Mantener el stockLote original de creación
+                  stockLote: lote.cantidad
                 } 
               }
             ).session(session);
           }
         }
 
-        // Crear el registro de salida usando la cantidad vendida como stockLote
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
@@ -244,26 +195,11 @@ router.post('/', async (req, res) => {
           stockLote: item.cantidad
         });
 
-        console.log('\nRegistro de salida a crear:', {
-          stockAnterior: historialSalida.stockAnterior,
-          stockNuevo: historialSalida.stockNuevo,
-          cantidad: historialSalida.cantidad,
-          stockLote: historialSalida.stockLote,
-          lotesModificados: lotesActualizados.map(l => ({
-            cantidadUsar: l.cantidadUsar,
-            stockLoteNuevo: l.stockLoteNuevo,
-            stockLoteActual: l.stockLoteActual
-          }))
-        });
-
         await historialSalida.save({ session });
 
-        // Actualizar stock del producto
         producto.stock = historialSalida.stockNuevo;
-        console.log('\nStock final del producto:', producto.stock);
         await producto.save({ session });
       } else {
-        console.log('\n--- PROCESO NORMAL PARA OTROS PRODUCTOS ---');
         let cantidadRestante = item.cantidad;
         const lotes = await Historial.find({
           producto: producto._id,
@@ -274,42 +210,22 @@ router.post('/', async (req, res) => {
         .lean()
         .session(session);
 
-        console.log('\nLotes encontrados:', lotes.map(lote => ({
-          fecha: lote.fecha,
-          stockLote: lote.stockLote,
-          operacion: lote.operacion,
-          costoFinal: lote.costoFinal
-        })));
-
         const stockTotalLotes = lotes.reduce((total, lote) => total + lote.stockLote, 0);
-        console.log('Stock total en lotes:', stockTotalLotes);
 
         if (stockTotalLotes < item.cantidad) {
           throw new Error(`Stock insuficiente en los lotes para el producto: ${producto.nombre}`);
         }
 
-        // Calcular cuánto se descontará de cada lote
         let lotesActualizados = [];
         let gananciasPorLote = [];
         
-        console.log('\nProceso de descuento de lotes (FIFO):');
         for (const lote of lotes) {
           if (cantidadRestante <= 0) break;
           
           const cantidadUsar = Math.min(lote.stockLote, cantidadRestante);
           const stockLoteNuevo = lote.stockLote - cantidadUsar;
           
-          console.log('Lote a actualizar:', {
-            fecha: lote.fecha,
-            stockLoteActual: lote.stockLote,
-            cantidadAUsar: cantidadUsar,
-            stockLoteNuevo: stockLoteNuevo,
-            costoFinal: lote.costoFinal,
-            precioVenta: item.precioUnitario
-          });
-
           if (cantidadUsar > 0) {
-            // Calcular ganancia para este lote
             const gananciaUnitaria = item.precioUnitario - lote.costoFinal;
             const gananciaTotal = gananciaUnitaria * cantidadUsar;
             
@@ -331,13 +247,10 @@ router.post('/', async (req, res) => {
             });
             
             cantidadRestante -= cantidadUsar;
-            console.log('Cantidad restante por descontar:', cantidadRestante);
           }
         }
 
-        // Actualizar los lotes
         for (const actualizacion of lotesActualizados) {
-          // Solo actualizamos el stockLote en el registro de salida
           await Historial.updateOne(
             { _id: actualizacion.loteId },
             { 
@@ -349,21 +262,19 @@ router.post('/', async (req, res) => {
             }
           ).session(session);
 
-          // Si es el primer lote (creación), mantener el stockLote original
           const lote = await Historial.findById(actualizacion.loteId).session(session);
           if (lote.operacion === 'creacion') {
             await Historial.updateOne(
               { _id: actualizacion.loteId },
               { 
                 $set: { 
-                  stockLote: lote.cantidad // Mantener el stockLote original de creación
+                  stockLote: lote.cantidad
                 } 
               }
             ).session(session);
           }
         }
 
-        // Crear el registro de salida usando la cantidad vendida como stockLote
         const historialSalida = new Historial({
           producto: producto._id,
           nombreProducto: producto.nombre,
@@ -377,33 +288,17 @@ router.post('/', async (req, res) => {
           stockLote: item.cantidad
         });
 
-        console.log('\nRegistro de salida a crear:', {
-          stockAnterior: historialSalida.stockAnterior,
-          stockNuevo: historialSalida.stockNuevo,
-          cantidad: historialSalida.cantidad,
-          stockLote: historialSalida.stockLote,
-          lotesModificados: lotesActualizados.map(l => ({
-            cantidadUsar: l.cantidadUsar,
-            stockLoteNuevo: l.stockLoteNuevo,
-            stockLoteActual: l.stockLoteActual
-          }))
-        });
-
         await historialSalida.save({ session });
 
-        // Actualizar stock del producto
         producto.stock = historialSalida.stockNuevo;
-        console.log('\nStock final del producto:', producto.stock);
         await producto.save({ session });
       }
-      console.log('=== FIN PROCESO DE VENTA PARA PRODUCTO ===\n');
     }
 
     await session.commitTransaction();
     res.status(201).json(venta);
   } catch (error) {
     await session.abortTransaction();
-    console.error('Error en transacción:', error);
     res.status(500).json({ 
       error: error.message,
       detalles: process.env.NODE_ENV === 'development' ? error.stack : undefined
@@ -646,66 +541,35 @@ router.put('/:id', async (req, res) => {
   session.startTransaction();
   
   try {
-    console.log('=== Inicio de actualización de venta ===');
-    console.log('ID de venta recibido:', req.params.id);
-    console.log('Datos recibidos:', JSON.stringify(req.body, null, 2));
-
-    // Validar ID de venta
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      console.error('ID de venta inválido:', req.params.id);
       return res.status(400).json({ error: 'ID de venta inválido' });
     }
 
-    // Buscar la venta existente
     const venta = await Venta.findById(req.params.id).session(session);
     if (!venta) {
-      console.error('Venta no encontrada:', req.params.id);
       return res.status(404).json({ message: 'Venta no encontrada' });
     }
 
-    // Validar y normalizar los datos recibidos
     const montoAbonado = parseFloat(req.body.montoAbonado || 0);
     const total = parseFloat(req.body.total || venta.total);
     const saldoPendiente = parseFloat(req.body.saldoPendiente || 0);
     const fecha = req.body.fecha ? new Date(req.body.fecha) : venta.fecha;
 
-    console.log('Montos normalizados:', {
-      montoAbonado,
-      total,
-      saldoPendiente,
-      fecha,
-      tipoMontoAbonado: typeof montoAbonado,
-      tipoTotal: typeof total
-    });
-
-    // Validaciones básicas
     if (isNaN(montoAbonado) || montoAbonado < 0) {
-      console.error('Monto abonado inválido:', montoAbonado);
       return res.status(400).json({ error: 'Monto abonado inválido' });
     }
 
     if (montoAbonado > total) {
-      console.error('Abono excede el total:', { montoAbonado, total });
       return res.status(400).json({ error: 'El abono no puede exceder el total' });
     }
 
-    // Actualizar los campos
     venta.montoAbonado = montoAbonado;
     venta.saldoPendiente = saldoPendiente;
     venta.estadoCredito = saldoPendiente > 0 ? 'vigente' : 'pagado';
     venta.fecha = fecha;
 
-    console.log('Datos actualizados:', {
-      nuevoMontoAbonado: venta.montoAbonado,
-      nuevoSaldoPendiente: venta.saldoPendiente,
-      nuevoEstadoCredito: venta.estadoCredito,
-      nuevaFecha: venta.fecha
-    });
-
-    // Guardar cambios
     await venta.save({ session });
 
-    // Poblar los campos relacionados
     await venta.populate([
       { 
         path: 'cliente',
@@ -717,31 +581,16 @@ router.put('/:id', async (req, res) => {
       }
     ]);
 
-    console.log('Venta actualizada exitosamente:', {
-      id: venta._id,
-      montoAbonado: venta.montoAbonado,
-      saldoPendiente: venta.saldoPendiente,
-      estadoCredito: venta.estadoCredito,
-      fecha: venta.fecha
-    });
-
     await session.commitTransaction();
     res.json(venta);
   } catch (error) {
     await session.abortTransaction();
-    console.error('Error al actualizar venta:', {
-      error: error.message,
-      stack: error.stack,
-      body: req.body,
-      params: req.params
-    });
     res.status(500).json({ 
       message: 'Error en el servidor',
       error: process.env.NODE_ENV === 'development' ? error.message : null
     });
   } finally {
     session.endSession();
-    console.log('=== Fin de actualización de venta ===');
   }
 }); 
 

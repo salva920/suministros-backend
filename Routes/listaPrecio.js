@@ -5,7 +5,6 @@ const ListaPrecio = require('../models/ListaPrecio');
 // Middleware para manejar errores
 const asyncHandler = fn => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(err => {
-    console.error('Error en API ListaPrecio:', err);
     res.status(500).json({
       mensaje: 'Error interno del servidor',
       error: err.message,
@@ -20,29 +19,23 @@ router.get('/', asyncHandler(async (req, res) => {
     page = 1, 
     limit = 10, 
     busqueda = '',
-    mes, // Nuevo parámetro para filtrar por mes (1-12)
-    anio = new Date().getFullYear(), // Por defecto el año actual
-    ordenar = 'nombreProducto', // Campo por el que ordenar
-    direccion = 'asc' // Dirección del ordenamiento (asc o desc)
+    mes,
+    anio = new Date().getFullYear(),
+    ordenar = 'nombreProducto',
+    direccion = 'asc'
   } = req.query;
   
-  // Crear filtro basado en búsqueda y filtros de fecha
   let filtro = {};
   
-  // Filtro por texto de búsqueda
   if (busqueda) {
     filtro.nombreProducto = { $regex: busqueda, $options: 'i' };
   }
   
-  // Filtro por mes y año si se especifica
   if (mes) {
     filtro.mes = parseInt(mes);
     filtro.anio = parseInt(anio);
   }
   
-  console.log('Filtros aplicados:', filtro);
-  
-  // Opciones de paginación y ordenamiento
   const opciones = {
     page: parseInt(page),
     limit: parseInt(limit),
@@ -51,7 +44,6 @@ router.get('/', asyncHandler(async (req, res) => {
     }
   };
   
-  // Obtener listas de precios paginadas
   const resultado = await ListaPrecio.paginate(filtro, opciones);
   
   res.status(200).json({
@@ -71,7 +63,6 @@ router.get('/', asyncHandler(async (req, res) => {
 router.get('/estadisticas-mensual', asyncHandler(async (req, res) => {
   const { anio = new Date().getFullYear() } = req.query;
   
-  // Agregación para obtener conteo por mes
   const estadisticas = await ListaPrecio.aggregate([
     {
       $match: { anio: parseInt(anio) }
@@ -116,37 +107,31 @@ router.get('/:id', asyncHandler(async (req, res) => {
 
 // Crear una nueva lista de precios
 router.post('/', asyncHandler(async (req, res) => {
-  console.log('Body recibido:', req.body);
-
   const {
     nombreProducto,
     precio1,
     precio2,
     precio3,
-    fecha // Opcionalmente permitir especificar una fecha
+    fecha
   } = req.body;
   
-  // Validar campo requerido
   if (!nombreProducto) {
     return res.status(400).json({ 
       mensaje: 'El nombre del producto es obligatorio'
     });
   }
   
-  // Procesar la fecha si se especifica
   let fechaCreacion = new Date();
   if (fecha) {
     try {
       fechaCreacion = new Date(fecha);
     } catch (error) {
-      console.warn('Fecha inválida, usando fecha actual:', error);
+      fechaCreacion = new Date();
     }
   }
   
-  // Crear nueva lista con valores seguros
   const nuevaLista = new ListaPrecio({
     nombreProducto,
-    // Generar un valor único para el campo producto
     producto: nombreProducto + '_' + Date.now(),
     precio1: Number(precio1) || 0,
     precio2: Number(precio2) || 0,
@@ -164,9 +149,6 @@ router.post('/', asyncHandler(async (req, res) => {
 
 // Actualizar una lista de precios
 router.put('/:id', asyncHandler(async (req, res) => {
-  console.log('Actualizando ID:', req.params.id);
-  console.log('Body de actualización:', req.body);
-
   const {
     nombreProducto,
     precio1,
@@ -174,20 +156,17 @@ router.put('/:id', asyncHandler(async (req, res) => {
     precio3
   } = req.body;
   
-  // Validar campo requerido
   if (!nombreProducto) {
     return res.status(400).json({ 
       mensaje: 'El nombre del producto es obligatorio'
     });
   }
   
-  // Verificar que el ID existe
   const existeListaPrecio = await ListaPrecio.findById(req.params.id);
   if (!existeListaPrecio) {
     return res.status(404).json({ mensaje: 'Lista de precios no encontrada' });
   }
   
-  // Actualizar lista con valores seguros
   const listaActualizada = await ListaPrecio.findByIdAndUpdate(
     req.params.id,
     {
@@ -231,10 +210,8 @@ router.post('/ajuste-masivo', asyncHandler(async (req, res) => {
     return res.status(400).json({ mensaje: 'Debe seleccionar al menos un tipo de precio' });
   }
   
-  // Convertir el porcentaje a un factor multiplicador
   const factor = 1 + (porcentaje / 100);
 
-  // Actualizar todos los precios seleccionados
   const updateObj = {};
   tiposPrecio.forEach(tipo => {
     if (['precio1', 'precio2', 'precio3'].includes(tipo)) {

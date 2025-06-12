@@ -129,16 +129,18 @@ router.post('/:id/abonos', async (req, res) => {
     // Redondear a 2 decimales
     const montoFinal = Math.round(montoEnBs * 100) / 100;
 
-    // Comparación con tolerancia de 0.01
-    if (montoFinal > saldoNumerico + 0.01) {
+    // Aumentar la tolerancia para diferencias de conversión
+    const tolerancia = 0.05; // 5 céntimos de tolerancia
+
+    if (montoFinal > saldoNumerico + tolerancia) {
       const saldoUSD = saldoNumerico / tasaCambioNumerica;
       return res.status(400).json({
         message: `El abono supera el saldo. Saldo disponible: ${saldoNumerico.toFixed(2)} Bs ($${saldoUSD.toFixed(2)})`
       });
     }
 
-    // Si la diferencia es mínima, ajustar al saldo exacto
-    const montoAjustado = (saldoNumerico - montoFinal) < 0.01 
+    // Si la diferencia es menor a la tolerancia, ajustar al saldo exacto
+    const montoAjustado = (saldoNumerico - montoFinal) < tolerancia 
       ? saldoNumerico 
       : montoFinal;
 

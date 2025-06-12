@@ -40,16 +40,6 @@ const registrarEnHistorial = async (producto, operacion, cantidad = 0) => {
 // Crear un nuevo producto
 router.post('/', async (req, res) => {
   try {
-    console.log('\n=== INICIO CREACIÓN DE PRODUCTO ===');
-    console.log('Datos recibidos:', {
-      nombre: req.body.nombre,
-      codigo: req.body.codigo,
-      cantidad: req.body.cantidad,
-      costoInicial: req.body.costoInicial,
-      fechaIngreso: req.body.fechaIngreso
-    });
-
-    // Validación mejorada
     const requiredFields = {
       nombre: 'Nombre es requerido',
       codigo: 'Código es requerido',
@@ -59,7 +49,6 @@ router.post('/', async (req, res) => {
     };
 
     const errors = [];
-    // Validación correcta para campos numéricos:
     Object.entries(requiredFields).forEach(([field, message]) => {
       const value = req.body[field];
       const numericCheck = ['costoInicial', 'cantidad'].includes(field) 
@@ -67,53 +56,35 @@ router.post('/', async (req, res) => {
         : !value;
 
       if (numericCheck) {
-        console.log(`Error de validación en campo ${field}:`, value);
         errors.push({ field, message });
       }
     });
 
     if (errors.length > 0) {
-      console.log('Errores de validación encontrados:', errors);
       return res.status(400).json({
         message: 'Error de validación',
         errors: errors.map(e => e.message)
       });
     }
 
-    // Trim y validación de código único
     const codigo = req.body.codigo.trim();
-    console.log('Código normalizado:', codigo);
-
     const productoExistente = await Producto.findOne({ codigo });
     
     if (productoExistente) {
-      console.log('Producto con código duplicado encontrado:', productoExistente._id);
       return res.status(400).json({
         message: `El código ${codigo} ya existe`,
         field: 'codigo'
       });
     }
 
-    // Crear producto con código trimmeado
     const nuevoProducto = new Producto({
       ...req.body,
       codigo: codigo,
-      stock: req.body.cantidad  // Stock inicial = cantidad ingresada
-    });
-
-    console.log('Nuevo producto a crear:', {
-      nombre: nuevoProducto.nombre,
-      codigo: nuevoProducto.codigo,
-      cantidad: nuevoProducto.cantidad,
-      stock: nuevoProducto.stock,
-      costoInicial: nuevoProducto.costoInicial,
-      costoFinal: nuevoProducto.costoFinal
+      stock: req.body.cantidad
     });
 
     await nuevoProducto.save();
-    console.log('Producto guardado exitosamente');
     
-    // Registrar creación en el historial
     const historialData = {
       producto: nuevoProducto._id,
       nombreProducto: nuevoProducto.nombre,
@@ -128,20 +99,9 @@ router.post('/', async (req, res) => {
       detalles: `Creación de producto - Cantidad inicial: ${nuevoProducto.cantidad}`
     };
 
-    console.log('Registro de historial a crear:', historialData);
-
-    const historialCreado = await Historial.create(historialData);
-    console.log('Registro de historial creado:', {
-      id: historialCreado._id,
-      stockAnterior: historialCreado.stockAnterior,
-      stockNuevo: historialCreado.stockNuevo,
-      stockLote: historialCreado.stockLote
-    });
-    
-    console.log('=== FIN CREACIÓN DE PRODUCTO ===\n');
+    await Historial.create(historialData);
     res.status(201).json(nuevoProducto.toObject());
   } catch (error) {
-    console.error('Error en servidor:', error);
     res.status(500).json({
       message: 'Error interno del servidor',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -168,8 +128,6 @@ router.get('/', async (req, res) => {
       select: 'nombre codigo proveedor costoInicial acarreo flete cantidad costoFinal stock fecha fechaIngreso'
     };
     const result = await Producto.paginate(filtro, options);
-
-    // Convertir a objeto plano con los getters aplicados
     const productosTransformados = result.docs.map(doc => doc.toObject());
 
     res.json({
@@ -179,7 +137,6 @@ router.get('/', async (req, res) => {
       currentPage: result.page
     });
   } catch (error) {
-    console.error('Error al obtener productos:', error);
     res.status(500).json({ message: 'Error en el servidor', details: error.message });
   }
 });
@@ -189,28 +146,21 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Validar que el ID sea un ObjectId válido
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'ID de producto inválido' });
     }
     
-    // Buscar el producto por ID
     const producto = await Producto.findById(id);
     
-    // Verificar si se encontró el producto
     if (!producto) {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
     
-    // Convertir el documento mongoose a un objeto plano
     const productoObjeto = producto.toObject();
-    
-    // Agregar propiedad id (además de _id) para compatibilidad
     productoObjeto.id = productoObjeto._id.toString();
     
     res.json(productoObjeto);
   } catch (error) {
-    console.error('Error al obtener producto por ID:', error);
     res.status(500).json({ 
       message: 'Error al obtener producto', 
       error: error.message 
@@ -223,63 +173,47 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validar que el ID sea un ObjectId válido
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'ID de producto inválido' });
     }
 
-    // Obtener el producto actual
     const productoActual = await Producto.findById(id);
     if (!productoActual) {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
 
-    // Mantener valores originales para comparación
     const stockOriginal = productoActual.stock;
     const cantidadOriginal = productoActual.cantidad;
 
-    // Preparar datos actualizados
     const datosActualizados = {
       ...req.body,
       fechaIngreso: moment.utc(req.body.fechaIngreso).toDate()
     };
 
-    // Si la cantidad está siendo actualizada, validar y ajustar el stock
     if (datosActualizados.cantidad !== undefined && datosActualizados.cantidad !== cantidadOriginal) {
-      console.log(`Cantidad cambiada de ${cantidadOriginal} a ${datosActualizados.cantidad}`);
-
-      // Calcular diferencia y ajustar stock si es necesario
       const diferenciaCantidad = datosActualizados.cantidad - cantidadOriginal;
 
-      // Si la cantidad aumentó, aumentar también el stock
       if (diferenciaCantidad > 0) {
         datosActualizados.stock = stockOriginal + diferenciaCantidad;
       } 
-      // Si disminuyó y hay suficiente stock, reducir el stock
       else if (diferenciaCantidad < 0 && stockOriginal >= Math.abs(diferenciaCantidad)) {
         datosActualizados.stock = stockOriginal + diferenciaCantidad;
       } 
-      // Si no hay suficiente stock, mantener el stock original y advertir
       else if (diferenciaCantidad < 0) {
         return res.status(400).json({
           message: `No hay suficiente stock para reducir la cantidad. Stock actual: ${stockOriginal}`
         });
       }
     } else {
-      // Si no se cambia la cantidad, mantener el stock actual
       datosActualizados.stock = stockOriginal;
     }
 
-    console.log('Datos actualizados:', datosActualizados);
-
-    // Actualizar el producto
     const productoActualizado = await Producto.findByIdAndUpdate(
       id, 
       datosActualizados,
       { new: true, runValidators: true }
     );
 
-    // Registrar cambio en el historial si el stock cambió
     if (productoActualizado.stock !== stockOriginal) {
       const diferencia = productoActualizado.stock - stockOriginal;
       const historialData = {
@@ -297,12 +231,10 @@ router.put('/:id', async (req, res) => {
         historialData.stockLote = diferencia;
       }
       await Historial.create(historialData);
-      console.log(`Historial creado: ${diferencia > 0 ? 'entrada' : 'salida'} de ${Math.abs(diferencia)} unidades`);
     }
 
     res.json(productoActualizado);
   } catch (error) {
-    console.error('Error al actualizar producto:', error);
     res.status(500).json({ 
       message: 'Error al actualizar producto',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -318,7 +250,6 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Producto no encontrado' });
     }
     
-    // Registrar eliminación
     await Historial.create({
       producto: productoEliminado._id,
       nombreProducto: productoEliminado.nombre,
@@ -339,26 +270,10 @@ router.post('/:id/entradas', async (req, res) => {
   session.startTransaction();
 
   try {
-    console.log('\n=== INICIO ENTRADA DE STOCK ===');
-    console.log('ID del producto:', req.params.id);
-    console.log('Datos recibidos:', {
-      cantidad: req.body.cantidad,
-      costoUnitario: req.body.costoUnitario,
-      acarreo: req.body.acarreo,
-      flete: req.body.flete,
-      fechaHora: req.body.fechaHora
-    });
-
     const producto = await Producto.findById(req.params.id).session(session);
     if (!producto) {
       throw new Error('Producto no encontrado');
     }
-
-    console.log('Producto encontrado:', {
-      nombre: producto.nombre,
-      stockActual: producto.stock,
-      cantidadActual: producto.cantidad
-    });
     
     const cantidad = Number(req.body.cantidad) || 0;
     if (cantidad <= 0) {
@@ -370,59 +285,28 @@ router.post('/:id/entradas', async (req, res) => {
       throw new Error('Fecha inválida');
     }
 
-    // Guardar valores anteriores para el historial
     const stockAnterior = producto.stock || 0;
     const cantidadAnterior = producto.cantidad || 0;
     
-    // Actualizar stock y cantidad
     producto.stock = stockAnterior + cantidad;
     producto.cantidad = cantidadAnterior + cantidad;
     
-    // Calcular el costo final de la entrada
     const costoInicial = Number(req.body.costoUnitario) || producto.costoInicial || 0;
     const acarreo = Number(req.body.acarreo) || 0;
     const flete = Number(req.body.flete) || 0;
     const costoFinalEntrada = ((costoInicial * cantidad) + acarreo + flete) / cantidad;
 
-    console.log('Cálculos de costos:', {
-      costoInicial,
-      acarreo,
-      flete,
-      costoFinalEntrada
-    });
-
-    // Buscar el último lote activo
     const ultimoLote = await Historial.findOne({
       producto: producto._id,
       operacion: { $in: ['creacion', 'entrada'] },
       stockLote: { $gt: 0 }
     }).sort({ fecha: -1 }).session(session);
 
-    console.log('Último lote encontrado:', ultimoLote ? {
-      fecha: ultimoLote.fecha,
-      stockLote: ultimoLote.stockLote,
-      operacion: ultimoLote.operacion
-    } : 'No hay lotes anteriores');
-
-    // Calcular el nuevo stock del lote
     const stockLoteAnterior = ultimoLote?.stockLote || 0;
     const nuevoStockLote = stockLoteAnterior + cantidad;
-    
-    console.log('Datos calculados:', {
-      stockAnterior,
-      cantidadAnterior,
-      nuevoStock: producto.stock,
-      nuevaCantidad: producto.cantidad,
-      stockLoteAnterior,
-      nuevoStockLote,
-      costoFinalEntrada
-    });
 
-    // Guardar los cambios en el producto
     await producto.save({ session });
-    console.log('Producto actualizado exitosamente');
     
-    // Registrar en el historial
     const historialData = {
       producto: producto._id,
       nombreProducto: producto.nombre,
@@ -437,24 +321,13 @@ router.post('/:id/entradas', async (req, res) => {
       detalles: `Entrada de stock - Cantidad: ${cantidad}`
     };
 
-    console.log('Registro de historial a crear:', historialData);
-
     const historialEntry = await Historial.create([historialData], { session });
 
-    // Verificar que el historial se creó correctamente
     if (!historialEntry || historialEntry.length === 0) {
       throw new Error('Error al crear el registro en el historial');
     }
 
-    console.log('Registro de historial creado:', {
-      id: historialEntry[0]._id,
-      stockAnterior: historialEntry[0].stockAnterior,
-      stockNuevo: historialEntry[0].stockNuevo,
-      stockLote: historialEntry[0].stockLote
-    });
-
     await session.commitTransaction();
-    console.log('=== FIN ENTRADA DE STOCK ===\n');
     
     res.json({
       producto: producto,
@@ -466,7 +339,6 @@ router.post('/:id/entradas', async (req, res) => {
     });
   } catch (error) {
     await session.abortTransaction();
-    console.error('Error en entrada de stock:', error);
     res.status(500).json({ 
       message: 'Error en entrada de stock', 
       error: error.message,
@@ -482,7 +354,6 @@ router.get('/:id/lotes', async (req, res) => {
   try {
     const productoId = req.params.id;
 
-    // Validar que el ID sea un ObjectId válido
     if (!mongoose.Types.ObjectId.isValid(productoId)) {
       return res.status(400).json({ 
         message: 'ID de producto inválido',
@@ -496,7 +367,6 @@ router.get('/:id/lotes', async (req, res) => {
       });
     }
 
-    // Verificar que el producto existe
     const producto = await Producto.findById(productoId);
     if (!producto) {
       return res.status(404).json({ 
@@ -546,10 +416,8 @@ router.get('/:id/lotes', async (req, res) => {
       { $sort: { fecha: 1 } }
     ]).exec();
 
-    // Asegurar que lotes sea un array
     const lotesArray = Array.isArray(lotes) ? lotes : [];
     
-    // Calcular totales
     const totales = lotesArray.reduce((acc, lote) => ({
       stockTotal: acc.stockTotal + (lote.stockLote || 0),
       costoPromedio: acc.costoPromedio + (lote.costoFinal || 0)
@@ -571,7 +439,6 @@ router.get('/:id/lotes', async (req, res) => {
       }
     };
 
-    // Si no hay lotes, enviar respuesta con array vacío pero no como error
     if (lotesArray.length === 0) {
       return res.json({
         ...response,
@@ -582,7 +449,6 @@ router.get('/:id/lotes', async (req, res) => {
     
     res.json(response);
   } catch (error) {
-    console.error('Error al obtener lotes:', error);
     res.status(500).json({ 
       message: 'Error al obtener lotes',
       error: error.message,
