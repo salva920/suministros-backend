@@ -9,14 +9,27 @@ const clienteSchema = new mongoose.Schema({
   },
   telefono: {
     type: String,
-    required: true,
-    match:  /^(?:\+?58-?)?0?4(1[2-9]|2[0-9])-?\d{7}$/ // Mejor validación para teléfonos venezolanos
+    trim: true,
+    // Validación más flexible para teléfonos venezolanos
+    // Permite formato: 0412-1234567, 0412 1234567, 04121234567
+    match: [
+      /^(?:0[24][124126]\d[-\s]?\d{7})$/,
+      'Formato de teléfono inválido'
+    ],
+    required: false // Hacer este campo opcional
   },
   email: {
     type: String,
     trim: true,
     lowercase: true,
-    match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ // Validación básica de email
+    validate: {
+      validator: function(v) {
+        // Permitir email vacío o con formato correcto
+        return v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+      },
+      message: props => 'Email inválido'
+    },
+    required: false // Hacer este campo opcional
   },
   direccion: {
     type: String,
@@ -24,20 +37,29 @@ const clienteSchema = new mongoose.Schema({
   },
   municipio: {
     type: String,
-    required: true,
-    trim: true
+    trim: true,
+    required: false // Hacer este campo opcional
   },
   rif: {
     type: String,
     required: true,
     unique: true,
-    match: /^[VEJG]-?\d{8,9}$/ // Regex mejorado para permitir guiones
+    validate: {
+      validator: function(v) {
+        // Validación de RIF y cédula más flexible:
+        // V + 6-9 dígitos: V123456, V12345678, etc.
+        // E + 6-9 dígitos: E123456, E12345678, etc.
+        // J/G + 8-10 dígitos: J12345678, G1234567890, etc.
+        return /^[V](\d{6,9})$|^[E](\d{6,9})$|^[JG](\d{8,10})$/.test(v);
+      },
+      message: props => 'Formato de documento inválido. Debe comenzar con V, E, J o G seguido del número.'
+    }
   },
-  categorias: [{
-    type: String,
-    enum: ['Alto Riesgo', 'Agente Retención'], // ENUM limitado
-    default: [] // Valor por defecto faltante
-  }],
+  categorias: {
+    type: [String],
+    enum: ['Alto Riesgo', 'Agente Retención'],
+    default: []
+  },
   municipioColor: {
     type: String,
     default: '#ffffff',
@@ -52,22 +74,22 @@ const clienteSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  contadorMes: {  // <- Nuevo campo necesario
+  contadorMes: {
     type: Number,
     default: 0
   },
-  deudaTotal: {  // Nuevo campo calculado
+  deudaTotal: {
     type: Number,
     default: 0
   },
-  ultimaCompra: {  // Nuevo campo útil
+  ultimaCompra: {
     type: Date
   }
 }, {
   timestamps: true
 });
 
-// Middleware para actualizar deuda automáticamente ✅
+// Middleware para actualizar deuda automáticamente
 clienteSchema.pre('save', function(next) {
   if (this.isModified('categorias')) {
     if (this.categorias.includes('Alto Riesgo')) {
