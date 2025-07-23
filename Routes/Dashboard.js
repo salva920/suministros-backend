@@ -82,7 +82,8 @@ router.get('/', asyncHandler(async (req, res) => {
         porcentajeCrecimiento: 0,
         productosBajoStock: [],
         totalClientes: 0,
-        totalFacturasPendientes: 0
+        totalFacturasPendientes: 0,
+        ultimasVentas: []
       }
     });
   }
@@ -101,7 +102,8 @@ router.get('/', asyncHandler(async (req, res) => {
     ventasTotalesData,
     productosBajoStock,
     totalClientes,
-    totalFacturasPendientes
+    totalFacturasPendientes,
+    ultimasVentas
   ] = await Promise.all([
     Venta.aggregate([
       { 
@@ -141,7 +143,12 @@ router.get('/', asyncHandler(async (req, res) => {
       .select('nombre stock')
       .lean(),
     Cliente.estimatedDocumentCount(),
-    FacturaPendiente.countDocuments({ saldo: { $gt: 0 } })
+    FacturaPendiente.countDocuments({ saldo: { $gt: 0 } }),
+    Venta.find()
+      .sort({ fecha: -1 })
+      .limit(5)
+      .select('cliente total fecha estado')
+      .lean()
   ]);
 
   const ventasMesActual = ventasMesActualData[0]?.total || 0;
@@ -160,7 +167,8 @@ router.get('/', asyncHandler(async (req, res) => {
       productosBajoStock,
       totalClientes,
       mesReferencia: `${anioActual}-${(mesActual + 1).toString().padStart(2, '0')}`,
-      totalFacturasPendientes
+      totalFacturasPendientes,
+      ultimasVentas: ultimasVentas || []
     }
   });
 }));
