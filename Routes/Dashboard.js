@@ -138,7 +138,7 @@ router.get('/', asyncHandler(async (req, res) => {
       }
     ]),
     Producto.find({ stock: { $lt: 5 } })
-      .select('nombreProducto stock')
+      .select('nombre stock')
       .lean(),
     Cliente.estimatedDocumentCount(),
     FacturaPendiente.countDocuments({ saldo: { $gt: 0 } })
