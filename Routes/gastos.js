@@ -74,19 +74,39 @@ router.post('/', async (req, res) => {
 // Obtener gastos
 router.get('/', async (req, res) => {
   try {
-    // Validar y normalizar parámetros de paginación
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const { 
+      page = 1, 
+      limit = 10,
+      getAll = false // Nuevo parámetro para obtener todos los registros
+    } = req.query;
 
-    const options = {
-      page,
-      limit,
-      sort: { fecha: -1 }
-    };
+    let result;
+    if (getAll === 'true') {
+      // Si getAll es true, obtener todos los registros sin paginación
+      const gastos = await Gasto.find({})
+        .sort({ fecha: -1 });
 
-    console.log('Parámetros de paginación:', options);
+      result = {
+        docs: gastos,
+        total: gastos.length,
+        totalPages: 1,
+        page: 1
+      };
+    } else {
+      // Usar paginación normal
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 10));
 
-    const result = await Gasto.paginate({}, options);
+      const options = {
+        page: pageNum,
+        limit: limitNum,
+        sort: { fecha: -1 }
+      };
+
+      console.log('Parámetros de paginación:', options);
+
+      result = await Gasto.paginate({}, options);
+    }
     
     // Validar resultado
     if (!result || !result.docs) {
@@ -95,12 +115,12 @@ router.get('/', async (req, res) => {
 
     res.json({
       gastos: result.docs,
-      total: result.total,
-      limit: result.limit,
-      page: result.page,
-      pages: result.pages,
-      hasNextPage: result.hasNextPage,
-      hasPrevPage: result.hasPrevPage
+      total: result.totalDocs || result.total || result.docs.length,
+      limit: result.limit || result.docs.length,
+      page: result.page || 1,
+      pages: result.totalPages || result.pages || 1,
+      hasNextPage: result.hasNextPage || false,
+      hasPrevPage: result.hasPrevPage || false
     });
   } catch (error) {
     console.error('Error al obtener gastos:', error);
