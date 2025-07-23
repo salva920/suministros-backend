@@ -148,6 +148,7 @@ router.get('/', asyncHandler(async (req, res) => {
       .sort({ fecha: -1 })
       .limit(5)
       .select('cliente total fecha estado')
+      .populate('cliente', 'nombre')
       .lean()
   ]);
 
