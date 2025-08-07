@@ -168,18 +168,6 @@ router.post('/', async (req, res) => {
               } 
             }
           ).session(session);
-
-          const lote = await Historial.findById(actualizacion.loteId).session(session);
-          if (lote.operacion === 'creacion') {
-            await Historial.updateOne(
-              { _id: actualizacion.loteId },
-              { 
-                $set: { 
-                  stockLote: lote.cantidad
-                } 
-              }
-            ).session(session);
-          }
         }
 
         const historialSalida = new Historial({
@@ -261,18 +249,6 @@ router.post('/', async (req, res) => {
               } 
             }
           ).session(session);
-
-          const lote = await Historial.findById(actualizacion.loteId).session(session);
-          if (lote.operacion === 'creacion') {
-            await Historial.updateOne(
-              { _id: actualizacion.loteId },
-              { 
-                $set: { 
-                  stockLote: lote.cantidad
-                } 
-              }
-            ).session(session);
-          }
         }
 
         const historialSalida = new Historial({
