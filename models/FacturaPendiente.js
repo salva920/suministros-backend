@@ -27,6 +27,11 @@ const facturaPendienteSchema = new Schema({
     required: true,
     min: 0
   },
+  moneda: {
+    type: String,
+    enum: ['Bs', 'USD'],
+    default: 'Bs'
+  },
   abono: {
     type: Number,
     default: 0,
