@@ -78,22 +78,26 @@ router.get('/', async (req, res) => {
 
 // Crear una nueva factura pendiente
 router.post('/', async (req, res) => {
-  const { fecha, concepto, proveedor, numeroFactura, monto, moneda } = req.body;
+  const { fecha, concepto, proveedor, numeroFactura, monto, moneda, tasaCambio } = req.body;
 
   if (!concepto || !monto) {
     return res.status(400).json({ message: 'Concepto y monto son requeridos' });
   }
 
   try {
-    // Obtener la tasa de cambio actual
-    const TasaCambio = require('../models/TasaCambio');
-    const tasaCambioDoc = await TasaCambio.findOne().sort({ createdAt: -1 });
-    const tasaCambio = tasaCambioDoc ? tasaCambioDoc.tasa : 1;
+    // Usar la tasa de cambio enviada desde el frontend, o obtener la actual si no se envía
+    let tasaCambioAUsar = parseFloat(tasaCambio);
+    
+    if (!tasaCambioAUsar || isNaN(tasaCambioAUsar)) {
+      const TasaCambio = require('../models/TasaCambio');
+      const tasaCambioDoc = await TasaCambio.findOne().sort({ createdAt: -1 });
+      tasaCambioAUsar = tasaCambioDoc ? tasaCambioDoc.tasa : 1;
+    }
 
     // Convertir monto a Bs si es necesario
     let montoEnBs = parseFloat(monto);
     if (moneda === 'USD') {
-      montoEnBs = montoEnBs * tasaCambio;
+      montoEnBs = montoEnBs * tasaCambioAUsar;
     }
 
     const nuevaFactura = new FacturaPendiente({
@@ -103,7 +107,7 @@ router.post('/', async (req, res) => {
       numeroFactura,
       monto: montoEnBs, // Siempre guardamos en Bs
       moneda: moneda || 'Bs',
-      tasaCambioUsada: tasaCambio
+      tasaCambioUsada: tasaCambioAUsar
     });
     
     await nuevaFactura.save();
