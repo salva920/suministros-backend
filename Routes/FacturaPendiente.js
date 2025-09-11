@@ -102,7 +102,8 @@ router.post('/', async (req, res) => {
       proveedor,
       numeroFactura,
       monto: montoEnBs, // Siempre guardamos en Bs
-      moneda: moneda || 'Bs'
+      moneda: moneda || 'Bs',
+      tasaCambioUsada: tasaCambio
     });
     
     await nuevaFactura.save();

@@ -42,6 +42,10 @@ const facturaPendienteSchema = new Schema({
     enum: ['Bs', 'USD'],
     default: 'Bs'
   },
+  tasaCambioUsada: {
+    type: Number,
+    default: 1
+  },
   saldo: {
     type: Number,
     default: function() {
