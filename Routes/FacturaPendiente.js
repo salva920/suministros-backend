@@ -134,10 +134,13 @@ router.post('/:id/abonos', async (req, res) => {
     const tasaCambioNumerica = parseFloat(tasaCambio);
     const saldoNumerico = parseFloat(factura.saldo.toFixed(2));
 
+    // Usar la tasa de cambio original de la factura si está disponible, sino usar la actual
+    const tasaCambioAUsar = factura.tasaCambioUsada || tasaCambioNumerica;
+
     // Calcular monto en Bs
     const montoEnBs = moneda === 'Bs' 
       ? montoNumerico 
-      : montoNumerico * tasaCambioNumerica;
+      : montoNumerico * tasaCambioAUsar;
 
     // Redondear a 2 decimales
     const montoFinal = Math.round(montoEnBs * 100) / 100;
@@ -146,7 +149,7 @@ router.post('/:id/abonos', async (req, res) => {
     const tolerancia = 0.05; // 5 céntimos de tolerancia
 
     if (montoFinal > saldoNumerico + tolerancia) {
-      const saldoUSD = saldoNumerico / tasaCambioNumerica;
+      const saldoUSD = saldoNumerico / tasaCambioAUsar;
       return res.status(400).json({
         message: `El abono supera el saldo. Saldo disponible: ${saldoNumerico.toFixed(2)} Bs ($${saldoUSD.toFixed(2)})`
       });
