@@ -45,9 +45,34 @@ const validateTransaction = (data) => {
 
 // Función de ordenamiento común para todos los endpoints
 const ordenarTransacciones = (transacciones) => {
-  return transacciones.sort((a, b) => {
+  return [...transacciones].sort((a, b) => {
     const dateDiff = new Date(b.fecha) - new Date(a.fecha);
-    return dateDiff !== 0 ? dateDiff : b._id.getTimestamp() - a._id.getTimestamp();
+    if (dateDiff !== 0) return dateDiff;
+
+    const aTimestamp = typeof a._id?.getTimestamp === 'function'
+      ? a._id.getTimestamp()
+      : new Date(a.fecha).getTime();
+    const bTimestamp = typeof b._id?.getTimestamp === 'function'
+      ? b._id.getTimestamp()
+      : new Date(b.fecha).getTime();
+
+    return bTimestamp - aTimestamp;
+  });
+};
+
+const ordenarTransaccionesAsc = (transacciones) => {
+  return transacciones.sort((a, b) => {
+    const dateDiff = new Date(a.fecha) - new Date(b.fecha);
+    if (dateDiff !== 0) return dateDiff;
+
+    const aTimestamp = typeof a._id?.getTimestamp === 'function'
+      ? a._id.getTimestamp()
+      : new Date(a.fecha).getTime();
+    const bTimestamp = typeof b._id?.getTimestamp === 'function'
+      ? b._id.getTimestamp()
+      : new Date(b.fecha).getTime();
+
+    return aTimestamp - bTimestamp;
   });
 };
 
@@ -163,13 +188,8 @@ router.post('/transacciones', asyncHandler(async (req, res) => {
     saldos: { USD: 0, Bs: 0 }
   });
 
-  caja.transacciones = caja.transacciones.map(t => ({
-    ...t,
-    tasaCambio: t.tasaCambio || tasaCambioNumerica
-  }));
-
   caja.transacciones.push(nuevaTransaccion);
-  caja.transacciones.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+  ordenarTransaccionesAsc(caja.transacciones);
   caja.saldos = recalcularSaldos(caja.transacciones);
   
   await caja.save();
@@ -249,7 +269,7 @@ router.put('/transacciones/:id', asyncHandler(async (req, res) => {
     tasaCambio: parseFloat(tasaCambio)
   };
 
-  caja.transacciones.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+  ordenarTransaccionesAsc(caja.transacciones);
   caja.saldos = recalcularSaldos(caja.transacciones);
   await caja.save();
 
@@ -280,7 +300,7 @@ router.delete('/transacciones/:id', asyncHandler(async (req, res) => {
   }
 
   caja.transacciones = caja.transacciones.filter(t => t._id.toString() !== id);
-  caja.transacciones.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+  ordenarTransaccionesAsc(caja.transacciones);
   caja.saldos = recalcularSaldos(caja.transacciones);
   await caja.save();
 
